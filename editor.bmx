@@ -1,9 +1,11 @@
+
 '
-' TranslatorX
+' Editor
 '
 '
 '
 '
+
 SuperStrict
 
 Framework wx.wxApp
@@ -29,6 +31,7 @@ Import wx.wxAboutBox
 Import wx.wxCheckListBox
 Import wx.wxArtProvider
 
+Import wx.wxScintilla
 Import wx.wxHtmlWindow
 Import wx.wxFileSystem
 Import wx.wxInternetFSHandler
@@ -37,10 +40,10 @@ Import brl.standardio
 Import brl.random
 
 Import "..\Pub\Functions\helper_functions.bmx"
-Import "..\Pub\wxDataview\TListview.bmx"
+'Import "..\Pub\wxDataview\TListview.bmx"
 Import "..\Pub\wxDialog\TDialog.bmx"
-Import "..\Pub\PDF\PDF_Document.bmx"
-Import "..\Pub\Database\database_functions.bmx"
+'Import "..\Pub\PDF\PDF_Document.bmx"
+'Import "..\Pub\Database\database_functions.bmx"
 
 Import "manifest\wx_rc.o"
 
@@ -88,9 +91,7 @@ Type TApp Extends wxApp
 	Field myprov:ArtProvider = ArtProvider(New ArtProvider.Create() )
 	
 	Global myframe:wxFrame
-	Global mywin:TWindow
-	Global myGroup1:TGroup1
-	Global mycon:TConsole
+	Global myWin:TWindow
 	Global myHelpFrame:wxFrame
 	Global myHelpWin:wxHtmlWindow
 	
@@ -120,7 +121,7 @@ Type TApp Extends wxApp
 		' Add frame creation code here
 		myframe	= wxFrame(New wxFrame.Create(Null, wxID_ANY, APP_TITLE + "   Ver." + APP_VERSION, - 1, - 1, width, height, wxDEFAULT_FRAME_STYLE | wxTAB_TRAVERSAL) )
 		'myframe.SetForegroundColour(wxSystemSettings.GetColour(wxSYS_COLOUR_WINDOW) )
-		myframe.SetBackgroundColour(New wxColour.Create(238, 238, 238) )
+		myframe.SetBackgroundColour(New wxColour.Create(255, 255, 200) )
 		
 		'Local icon:wxIcon = New wxIcon.Create()
 		'icon.LoadFile("graphics/icon.ico", wxBITMAP_TYPE_ICO)
@@ -138,10 +139,11 @@ Type TApp Extends wxApp
 		
 		myframe.refresh()
 		
-		mywin	 = TWindow.Create()
-		mycon	 = TConsole.Create()
-		myGroup1 = TGroup1.Create()
+		TWindow.Create()
+		TConsole.Create()
 		
+		myframe.Layout()
+		myframe.Center(wxBOTH)
 		myframe.show()
 		'myHelpFrame.show()
 		
@@ -151,75 +153,75 @@ Type TApp Extends wxApp
 	
 End Type
 
+
 Type TWindow Extends TApp
 	
-	Field m_statusbar:wxStatusBar
-	Field m_menubar:wxMenuBar
-	Field m_toolbar:wxToolBar
-	'Field m_menu1:wxMenu
-	'Field m_menu2:wxMenu
+	Field w_statusbar:wxStatusBar
+	Field w_menubar:wxMenuBar
+	Field w_toolbar:wxToolBar
 	
-	Global imageListMain:wxImageList
-	Global imageListDetail:wxImageList
-	Global m_sizer:wxBoxSizer = New wxBoxSizer.Create(wxVERTICAL)
+	Global imageList:wxImageList
+	Global w_sizer:wxBoxSizer = New wxBoxSizer.Create(wxVERTICAL)
 	
-	Function Create:TWindow()
-		Local w:TWindow = New TWindow
-		w.OnInitMenu()
-		w.OnInitToolbar()
-		w.ConnectEvents()
-		Return w
+	Function Create()
+		myWin = New TWindow
+		myWin.OnInit()
+		myWin.ConnectEvents()
 	EndFunction
 	
-	Method OnInitMenu()
+	Method OnInit()
 		
-		'Create imagelists for listviews
-		'imageListMain = New wxImageList.Create(32, 16)
-		'imageListMain.Add( wxBitmap.CreateFromFile( "incbin::graphics\small_ok.png", wxBITMAP_TYPE_PNG ) )
-		'imageListMain.Add( wxBitmap.CreateFromFile( "incbin::graphics\small_not_ok.png", wxBITMAP_TYPE_PNG ) )
-		'imageListMain.Add( wxBitmap.CreateFromFile( "incbin::graphics\small_late.png", wxBITMAP_TYPE_PNG ) )
+		myFrame.SetSizer(w_sizer)
 		
-		m_statusbar = myframe.CreateStatusBar(1, 0 | wxST_SIZEGRIP, wxID_ANY)
+		w_statusbar = myframe.CreateStatusBar(1, 0 | wxST_SIZEGRIP, wxID_ANY)
 		
-		'Create main window menu's
-		'--------------------------
-		m_menubar = New wxMenuBar.Create()
-
-		Local m_menu1:wxMenu = New wxMenu.Create()
-		m_menubar.Append(m_menu1, _("File") )
-			Local m_menuItem1_1:wxMenuItem = New wxMenuItem.Create(m_menu1, menuID_QUIT, _("Quit"), "", wxITEM_NORMAL)
-			m_menu1.AppendItem(m_menuItem1_1)
-					
-		Local m_menu2:wxMenu = New wxMenu.Create()
-		m_menubar.Append(m_menu2, _("Edit") )
-		
-		Local m_menu3:wxMenu = New wxMenu.Create()
-		m_menubar.Append(m_menu3, _("Program") )
-
-		Local m_menu4:wxMenu = New wxMenu.Create()
-		m_menubar.Append(m_menu4, _("Info") )
-
-		Local m_menuItem4_1:wxMenuItem = New wxMenuItem.Create(m_menu4, menuID_HELP, _("Help"), "", wxITEM_NORMAL)
-		Local m_menuItem4_2:wxMenuItem = New wxMenuItem.Create(m_menu4, menuID_ABOUT, _("About"), "", wxITEM_NORMAL)
-		m_menu4.AppendItem(m_menuItem4_1)
-		m_menu4.AppendItem(m_menuItem4_2)
-		
-		myframe.SetMenuBar(m_menubar)
+		InitMenu()
+		InitToolbar()
 		
 	EndMethod
 	
-	Method OnInitToolbar()	
+	Method InitMenu()
+		
+		'Create main window menu's
+		'--------------------------
+		w_menubar = New wxMenuBar.Create()
+
+		Local w_menu1:wxMenu = New wxMenu.Create()
+		w_menubar.Append(w_menu1, _("File") )
+			Local w_menuItem1_1:wxMenuItem = New wxMenuItem.Create(w_menu1, menuID_QUIT, _("Quit"), "", wxITEM_NORMAL)
+			w_menu1.AppendItem(w_menuItem1_1)
+					
+		Local w_menu2:wxMenu = New wxMenu.Create()
+		w_menubar.Append(w_menu2, _("Edit") )
+		
+		Local w_menu3:wxMenu = New wxMenu.Create()
+		w_menubar.Append(w_menu3, _("Program") )
+
+		Local w_menu4:wxMenu = New wxMenu.Create()
+		w_menubar.Append(w_menu4, _("Info") )
+
+		Local w_menuItem4_1:wxMenuItem = New wxMenuItem.Create(w_menu4, menuID_HELP, _("Help"), "", wxITEM_NORMAL)
+		Local w_menuItem4_2:wxMenuItem = New wxMenuItem.Create(w_menu4, menuID_ABOUT, _("About"), "", wxITEM_NORMAL)
+		w_menu4.AppendItem(w_menuItem4_1)
+		w_menu4.AppendItem(w_menuItem4_2)
+		
+		myframe.SetMenuBar(w_menubar)
+		
+	EndMethod
+
+	
+	Method InitToolbar()	
 
 		'Toolbar
-		m_toolbar = New wxToolBar.Create(myframe, wxID_ANY,,,,, wxTB_HORIZONTAL | wxTB_TEXT | wxTB_HORZ_TEXT | wxTB_FLAT)
-		m_toolbar.AddTool(userID_NEW, _("New"), ArtProvider.getBitmap(userID_NEW), wxNullBitmap, wxITEM_NORMAL, "New file", "")
-		m_toolbar.AddTool(userID_OPEN, _("Open"), ArtProvider.getBitmap(userID_OPEN), wxNullBitmap, wxITEM_NORMAL, "Open file", "")
-		m_toolbar.AddTool(userID_CLOSE, _("Close"), ArtProvider.getBitmap(userID_CLOSE), wxNullBitmap, wxITEM_NORMAL, "Close file", "")
-		m_toolbar.AddTool(userID_SAVE, _("Save"), ArtProvider.getBitmap(userID_SAVE), wxNullBitmap, wxITEM_NORMAL, "Save file", "")
+		w_toolbar = New wxToolBar.Create(myframe, wxID_ANY,,,,, wxTB_HORIZONTAL | wxTB_TEXT | wxTB_HORZ_TEXT | wxTB_FLAT)
+		w_toolbar.AddTool(userID_NEW, _("New"), ArtProvider.getBitmap(userID_NEW), wxNullBitmap, wxITEM_NORMAL, "New file", "")
+		w_toolbar.AddTool(userID_OPEN, _("Open"), ArtProvider.getBitmap(userID_OPEN), wxNullBitmap, wxITEM_NORMAL, "Open file", "")
+		w_toolbar.AddTool(userID_CLOSE, _("Close"), ArtProvider.getBitmap(userID_CLOSE), wxNullBitmap, wxITEM_NORMAL, "Close file", "")
+		w_toolbar.AddTool(userID_SAVE, _("Save"), ArtProvider.getBitmap(userID_SAVE), wxNullBitmap, wxITEM_NORMAL, "Save file", "")
 			
-		m_toolbar.Realize()
+		w_toolbar.Realize()
 		
-		m_sizer.Add(m_toolbar, 0, wxEXPAND, 5)	
+		w_sizer.Add(w_toolbar, 0, wxEXPAND, 5)	
 		
 	EndMethod
 	
@@ -228,10 +230,10 @@ Type TWindow Extends TApp
 		myframe.Connect(menuID_ABOUT, wxEVT_COMMAND_MENU_SELECTED, OnMenuAbout)
 		myframe.Connect(menuID_HELP, wxEVT_COMMAND_MENU_SELECTED, OnMenuHelp)
 		
-		m_toolbar.connect(userID_NEW, wxEVT_COMMAND_TOOL_CLICKED, OnToolNew, Null, Self)
-		m_toolbar.connect(userID_OPEN, wxEVT_COMMAND_TOOL_CLICKED, OnToolOpen, Null, Self)
-		m_toolbar.connect(userID_CLOSE, wxEVT_COMMAND_TOOL_CLICKED, OnToolClose, Null, Self)
-		m_toolbar.connect(userID_SAVE, wxEVT_COMMAND_TOOL_CLICKED, OnToolSave, Null, Self)
+		w_toolbar.connect(userID_NEW, wxEVT_COMMAND_TOOL_CLICKED, OnToolNew, Null, Self)
+		w_toolbar.connect(userID_OPEN, wxEVT_COMMAND_TOOL_CLICKED, OnToolOpen, Null, Self)
+		w_toolbar.connect(userID_CLOSE, wxEVT_COMMAND_TOOL_CLICKED, OnToolClose, Null, Self)
+		w_toolbar.connect(userID_SAVE, wxEVT_COMMAND_TOOL_CLICKED, OnToolSave, Null, Self)
 		
 	EndMethod
 	
@@ -243,7 +245,7 @@ Type TWindow Extends TApp
 		
 		Local info:wxAboutDialogInfo = New wxAboutDialogInfo.Create()
 		
-		info.SetName(AppTitle)
+		info.SetName(APP_TITLE)
 		info.SetVersion(APP_VERSION)
 		info.SetDescription("Editor for Blitzmax NG")
 		info.SetCopyright("Henri Vihonen")
@@ -268,7 +270,8 @@ Type TWindow Extends TApp
 	End Function
 	
 	Function OnToolNew(ev:wxEvent)
-		
+		Local e:TEditor = TEditor.myEdit
+		e.AddNewPage()
 	EndFunction
 
 	Function OnToolOpen(ev:wxEvent)
@@ -276,204 +279,102 @@ Type TWindow Extends TApp
 	EndFunction
 
 	Function OnToolClose(ev:wxEvent)
-		
+		Local e:TEditor = TEditor.myEdit
+		Local index:Int = e.e_book.GetSelection()
+		e.e_book.DeletePage(index)
 	EndFunction
 
 	Function OnToolSave(ev:wxEvent)
 		
 	EndFunction
 	
-	Function ClearFields(parent:Object)
-
-		Local win:wxWindow = wxWindow(parent)
-		If Not win Then Return
-		
-		Local kids:wxWindow[] = win.GetChildren()
-		For Local kid:wxWindow = EachIn kids
-		
-			If kid.GetChildren() Then ClearFields(kid)
-		
-			Local tmpField:wxTextCtrl = wxTextCtrl(kid)
-			If tmpField Then
-				tmpField.SetValue("")
-			EndIf
-			
-			Local tmpCombo:wxComboBox = wxComboBox(kid)
-			If tmpCombo Then
-				tmpCombo.SelectItem(0)
-				'tmpCombo.Clear()
-				'tmpCombo.SetValue("")
-			EndIf
-			
-			Local tmpChoice:wxChoice = wxChoice(kid)
-			If tmpChoice Then
-				tmpChoice.SelectItem(0)
-			EndIf
-			
-			Local tmpLV:TListview = TListview(kid)
-			If tmpLV Then
-				If Not tmpLV.IsGlobal() Then tmpLV.DeleteAllItems()
-			EndIf
-		Next
-	EndFunction
-	
-	
 EndType
 
 
 Type TConsole Extends TWindow
 	
+	Global myCon:TConsole
 	Global conPanel:wxPanel
-	Global group1:wxPanel
+	'Global group1:wxPanel
 	Global conSizer:wxBoxSizer = New wxBoxSizer.Create(wxVERTICAL)
 	
-	Function Create:TConsole()
-		Local c:TConsole = New TConsole
-		c.OnInit()
-		Return c
+	Function Create()
+		myCon = New TConsole
+		myCon.OnInit()
 	EndFunction
 	
 	Method OnInit()
 		
 		conPanel = New wxPanel.Create(myframe, wxID_ANY,,,,, wxTAB_TRAVERSAL)		
-		
-		group1 = New wxPanel.Create(conPanel, wxID_ANY,,,,, wxTAB_TRAVERSAL)		
+			conPanel.SetBackgroundColour(New wxColour.Create(255, 100, 255) )
+		'group1 = New wxPanel.Create(conPanel, wxID_ANY,,,,, wxTAB_TRAVERSAL)		
 		'group1 = New wxScrolledWindow.Create(conPanel, wxID_ANY,,,,, wxHSCROLL | wxVSCROLL)
 		'group1.SetScrollRate(5, 5)
+		w_sizer.Add(conPanel, 1, wxEXPAND, 5)
+		conPanel.SetSizer(conSizer)
 		
+		TEditor.Create()
 	EndMethod
 	
 EndType
 
 
-Type TGroup1 Extends TConsole
-
-	Global g1_notebook:wxFlatNotebook
-	Global g1_sizer:wxBoxSizer = New wxBoxSizer.Create(wxVERTICAL)
+Type TEditor Extends TConsole
 	
-	Global g1_main:TGroup1_main
+	Global myEdit:TEditor
+	Global list:TList = New TList
+	'Global e_panel:wxPanel
+	Global e_book:wxFlatNotebook
+	'Global e_sizer:wxBoxSizer = New wxBoxSizer.Create(wxVERTICAL)
 	
-	Function Create:TGroup1()
-		Local r:TGroup1 = New TGroup1
-		r.OnInit()
-		
-		g1_main = TGroup1_main.Create()
-		
-		Return r
+	'Global e_main:TEditor_main
+	Global _globalID:Int
+	
+	Function Create()
+		myEdit = New TEditor
+		myEdit.OnInit()
 	EndFunction
 	
 	Method OnInit()
-		
-		'Menus
-		'g1_mainListview.menu = New wxMenu.Create()
-		'Local filterMenu:wxMenuItem = g1_mainListview.menu.AppendSubMenu(g1_mainListview.menu, "Filter", "Filter")		
-		'g1_mainListview.menu.Append(listID_FILTER_WEEK, "&Suodata")
-		
 		
 		Local bookStyle:Int = 0
 		
 		bookStyle:| wxFNB_VC71
 		bookStyle :| wxFNB_TABS_BORDER_SIMPLE
-		bookStyle :| wxFNB_NODRAG
+		'bookStyle :| wxFNB_NODRAG
 		bookStyle :| wxFNB_CUSTOM_DLG
 		bookStyle :| wxFNB_NO_X_BUTTON
 	
-		g1_notebook = New wxFlatNotebook.CreateFNB(group1, wxID_ANY,,,,, bookStyle)
-		g1_notebook.SetCustomizeOptions(wxFNB_CUSTOM_TAB_LOOK | wxFNB_CUSTOM_LOCAL_DRAG | wxFNB_CUSTOM_FOREIGN_DRAG )
+		e_book = New wxFlatNotebook.CreateFNB(conPanel, wxID_ANY,,,,, bookStyle)
+		e_book.SetCustomizeOptions(wxFNB_CUSTOM_TAB_LOOK | wxFNB_CUSTOM_LOCAL_DRAG | wxFNB_CUSTOM_FOREIGN_DRAG )
 		
-		'g1_notebook = New wxFlatNotebook.Create(group1, wxID_ANY,,,,, wxAUI_NB_TAB_MOVE )
-		
-		
-
-		g1_sizer.Add(g1_notebook, 1, wxEXPAND, 5)
-		
-		group1.SetSizer(g1_sizer)
-		group1.Layout()
-		g1_sizer.Fit(group1)
-
-		conSizer.Add(group1, 1, wxEXPAND, 5)
-
-		conPanel.SetSizer(conSizer)
+		conSizer.Add(e_book, 1, wxEXPAND, 5)		
 		conPanel.Layout()
-		conSizer.Fit(conPanel)
-		m_sizer.Add(conPanel, 1, wxEXPAND, 5)	'frameSizer.Add(conPanel, 1, wxEXPAND, 5)
-		
-		myframe.SetSizer(m_sizer)
-		myframe.Layout()
-		myframe.Center(wxBOTH)
-		
+
+		AddNewPage()
 		
 		ConnectEvents()
 	EndMethod
 	
 	Method ConnectEvents()
-		'g1_toolbar1.connect(userID_REFRESH, wxEVT_COMMAND_TOOL_CLICKED, OnToolRefresh, Null, Self)
-		'g1_toolbar3.connect(userID_NEW, wxEVT_COMMAND_TOOL_CLICKED, OnToolRefresh, Null, Self)
-		'g1_toolbar3.connect(userID_SEARCH, wxEVT_COMMAND_TOOL_CLICKED, OnToolRefresh, Null, Self)
-		'g1_mainListview.Connect(listID_FILTER_WEEK, wxEVT_COMMAND_MENU_SELECTED, OnMenuFilterWeek)
+		'e_toolbar1.connect(userID_REFRESH, wxEVT_COMMAND_TOOL_CLICKED, OnToolRefresh, Null, Self)
+		'e_toolbar3.connect(userID_NEW, wxEVT_COMMAND_TOOL_CLICKED, OnToolRefresh, Null, Self)
+		'e_toolbar3.connect(userID_SEARCH, wxEVT_COMMAND_TOOL_CLICKED, OnToolRefresh, Null, Self)
+		'e_mainListview.Connect(listID_FILTER_WEEK, wxEVT_COMMAND_MENU_SELECTED, OnMenuFilterWeek)
 	EndMethod
 	
-	
-EndType
-
-Type TGroup1_main Extends TGroup1
-	
-	Global remarks:TMap, orders:TMap, updates:TList
-	
-	Field _lines:Int, _totalQty:Int
-	
-	Field g1_mainInfo:wxStaticText
-	Field g1_mainPanel:wxPanel
-	Field g1_mainListview:TListview
-	'Field g1_mainToolbar:wxToolBar
-	'Field g1_mainToolChoice:wxChoice
-	Field g1_mainLine_1:wxStaticLine
-	Field g1_mainLine_2:wxStaticLine
-	
-	Function Create:TGroup1_main()
-		Local r:TGroup1_main = New TGroup1_main
-		r.OnInit()
-		Return r
-	End Function
-	
-	Method OnInit()
-		
-		g1_mainPanel = New wxPanel.Create(g1_notebook, wxID_ANY,,,,, wxTAB_TRAVERSAL)
-
-		Local g1_mainSizer:wxBoxSizer = New wxBoxSizer.Create(wxVERTICAL)
-		
-		g1_mainLine_1 = New wxStaticLine.Create(g1_mainPanel, wxID_ANY,,,,, wxLI_HORIZONTAL)
-		g1_mainSizer.Add(g1_mainLine_1, 0, wxEXPAND | wxALL, 5)
-		
-		'Toolbar
-
-		
-		g1_mainLine_2 = New wxStaticLine.Create(g1_mainPanel, wxID_ANY,,,,, wxLI_HORIZONTAL)
-		g1_mainSizer.Add(g1_mainLine_2, 0, wxEXPAND | wxALL, 5)
-
-		Rem
-		'Editor
-				
-		g1_mainSizer.Add(g1_mainListview, 1, wxALL | wxEXPAND, 5)	
-		EndRem
-		
-		g1_mainPanel.SetSizer(g1_mainSizer)
-		g1_mainPanel.Layout()
-		g1_mainSizer.Fit(g1_mainPanel)
-		g1_notebook.AddPage(g1_mainPanel, _("untitled.bmx"), True)
-		
-		ConnectEvents()
-	End Method
-	
-	Method ConnectEvents()
+	Method AddNewPage:wxWindow()
+		Local name:String = "untitled" + GetNewID() + ".bmx"
+		Local sci:wxScintilla = New wxScintilla.Create( e_book, wxID_ANY,,,,, 0)
+		e_book.AddPage(sci , name, True)
 	EndMethod
 	
-	Method SetInfo(text:String = "")
-		'g1_mainInfo.SetLabel("Status: " + text)
-		'PollSystem()	'	;myframe.Refresh(); Delay 1
-	End Method
-
+	Method GetNewID:Int()
+		_globalID:+ 1
+		Return _globalID
+	EndMethod
 EndType
+
 
 Rem
 Function SYS_CheckIndex:Int()
@@ -506,6 +407,7 @@ Function SYS_CheckIndex:Int()
 EndFunction
 EndRem
 
+Rem
 Function SYS_WriteLog:Int(error:String)
 	If Not error Then Return False
 	
@@ -555,7 +457,7 @@ Type TSYS_error
 		Return True
 	EndMethod
 EndType
-
+EndRem
 
 
 Type ArtProvider Extends wxArtProvider
