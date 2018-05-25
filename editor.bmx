@@ -38,14 +38,12 @@ Import wx.wxInternetFSHandler
 
 Import brl.standardio
 Import brl.random
+Import brl.linkedlist
+Import brl.retro
 
-Import "..\Pub\Functions\helper_functions.bmx"
-'Import "..\Pub\wxDataview\TListview.bmx"
-Import "..\Pub\wxDialog\TDialog.bmx"
-'Import "..\Pub\PDF\PDF_Document.bmx"
-'Import "..\Pub\Database\database_functions.bmx"
-
+?Win32
 Import "manifest\wx_rc.o"
+?
 
 '---------------------------------
 'Application info
@@ -55,6 +53,8 @@ Const APP_VERSION:String = "0.1"	'
 '----------------------------------
 
 
+Global COLOUR_BACK:wxColour = New wxColour.Create(51, 68, 85)
+Global COLOUR_FRONT:wxColour = New wxColour.Create(240, 240, 240)
 
 'Graphics imports
 'Incbin "manifest\new.ico"
@@ -366,6 +366,9 @@ Type TEditor Extends TConsole
 	Method AddNewPage:wxWindow()
 		Local name:String = "untitled" + GetNewID() + ".bmx"
 		Local sci:wxScintilla = New wxScintilla.Create( e_book, wxID_ANY,,,,, 0)
+		
+		Local t:String = "'TESTING~nFunction() ~qHello world~q Hello Double Int 123~n~nRem~ncommented~nEndrem"
+		sci.AddText(t)
 		SetLexerStyle(sci, wxSCI_LEX_BLITZMAX)
 		e_book.AddPage(sci , name, True)
 	EndMethod
@@ -386,27 +389,56 @@ Type TEditor Extends TConsole
 				
 				Local s:TStyle = TStyle.GetStyle(lexer)
 				
-				edit.StyleResetDefault()
+				
+				' Default style
+				'-----------------------------
+				'edit.StyleResetDefault()
 				'scintilla.Styles[Style.Default].Font = "Consolas";
 				'scintilla.Styles[Style.Default].Size = 10;
+				
+				Local margin:Int = edit.TextWidth(wxSCI_STYLE_LINENUMBER, "_999999")
+				
+				DebugLog margin
+				
+				Local font:wxFont = New wxFont.CreateWithAttribs(16, wxTELETYPE, wxNORMAL, wxNORMAL)
+				edit.SetMarginWidth(0, margin)
+				edit.StyleSetFontFont(wxSCI_STYLE_DEFAULT, font)
+				
+				edit.StyleSetForeground(wxSCI_STYLE_DEFAULT, COLOUR_FRONT)
+				edit.StyleSetBackground(wxSCI_STYLE_DEFAULT, COLOUR_BACK)
 				edit.StyleClearAll()
 				
-				edit.SetLexer(lexer)
+				edit.StyleSetForeground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("DARK GREY"))
+				edit.StyleSetBackground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("LIGHT BLUE"))
+				edit.SetCaretForeground(COLOUR_FRONT)
+				'edit.StyleSetForeground(wxSCI_STYLE_INDENTGUIDE, New wxColour.CreateNamedColour("DARK GREY"))
+				
+				'SetViewEOL(commonPrefs.displayEOLEnable)
+				'SetIndentationGuides(commonPrefs.indentGuideEnable)
+				'	' Apply default style
+				'--------------------------------------------------
 				
 				
-				edit.SetKeywords(0, s.keywords_1)
-				edit.SetKeywords(1, s.keywords_2)
+				' Lexer style
+				
 				'etStyle([wxSCI_B_COMMENT, wxSCI_B_COMMENTREM], comments)
-				
 				'SetStyle([wxSCI_B_KEYWORD, wxSCI_B_CONSTANT, wxSCI_B_PREPROCESSOR], keywords)
 				'SetStyle([wxSCI_B_KEYWORD2], keywords2)
 				'SetStyle([wxSCI_B_KEYWORD3], keywords3)
 				'SetStyle([wxSCI_B_KEYWORD4], keywords4)
 				
-				edit.StyleSetForeground(wxSCI_B_KEYWORD, s.style_keyword )
+				'edit.StyleSetBackground(wxSCI_B_DEFAULT, COLOUR_BACK )
+				edit.StyleSetForeground(wxSCI_B_KEYWORD, s.style_keyword_1 )
+				edit.StyleSetForeground(wxSCI_B_KEYWORD2, s.style_keyword_2 )
 				edit.StyleSetForeground(wxSCI_B_STRING, s.style_string )
+				edit.StyleSetForeground(wxSCI_B_NUMBER, s.style_number )
 				edit.StyleSetForeground(wxSCI_B_COMMENT, s.style_comment )
-			
+				edit.StyleSetForeground(wxSCI_B_COMMENTREM, s.style_comment )
+				
+				edit.SetLexer(lexer)
+				edit.SetKeywords(0, s.keywords_1)
+				edit.SetKeywords(1, s.keywords_2)
+		
 				DebugLog edit.DescribeKeywordSets()
 				DebugLog edit.GetLexer()
 		EndSelect
@@ -417,17 +449,21 @@ EndType
 
 Type TStyle
 	Field lexer:Int = -1
-	Field keywords_1:String = "print function rem end"
+	
+	Field keywords_1:String = "print function rem endrem "
 	Field keywords_2:String = "int string float double"
-	Field style_comment:wxColour = wxBLUE()
+	
+	Field style_comment:wxColour = New wxColour.Create(130, 210, 230)
 	Field style_string:wxColour = wxGREEN()
-	Field style_keyword:wxColour = New wxColour.Create(240, 240, 0) 'Yellow
+	Field style_number:wxColour =  New wxColour.Create(70, 190, 220)
+	Field style_keyword_1:wxColour = New wxColour.Create(220, 220, 0) 'Yellow
+	Field style_keyword_2:wxColour = New wxColour.Create(148, 148, 255) 'Teak
 	
 	Global _list:TList = New TList
 	
 	Function GetStyle:TStyle(lexer:Int)
 		Local s:TStyle
-
+		
 		For s = EachIn _list
 			If s.lexer = lexer Then Return s
 		Next
