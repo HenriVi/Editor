@@ -366,6 +366,7 @@ Type TEditor Extends TConsole
 	Method AddNewPage:wxWindow()
 		Local name:String = "untitled" + GetNewID() + ".bmx"
 		Local sci:wxScintilla = New wxScintilla.Create( e_book, wxID_ANY,,,,, 0)
+		SetLexerStyle(sci, wxSCI_LEX_BLITZMAX)
 		e_book.AddPage(sci , name, True)
 	EndMethod
 	
@@ -373,8 +374,71 @@ Type TEditor Extends TConsole
 		_globalID:+ 1
 		Return _globalID
 	EndMethod
+	
+	Method SetLexerStyle(edit:wxScintilla, lexer:Int)
+		
+		If Not edit Then Return
+		
+		Select lexer
+			Case wxSCI_LEX_BLITZMAX
+				
+				DebugLog "lexer = wxSCI_LEX_BLITZMAX"
+				
+				Local s:TStyle = TStyle.GetStyle(lexer)
+				
+				edit.StyleResetDefault()
+				'scintilla.Styles[Style.Default].Font = "Consolas";
+				'scintilla.Styles[Style.Default].Size = 10;
+				edit.StyleClearAll()
+				
+				edit.SetLexer(lexer)
+				
+				
+				edit.SetKeywords(0, s.keywords_1)
+				edit.SetKeywords(1, s.keywords_2)
+				'etStyle([wxSCI_B_COMMENT, wxSCI_B_COMMENTREM], comments)
+				
+				'SetStyle([wxSCI_B_KEYWORD, wxSCI_B_CONSTANT, wxSCI_B_PREPROCESSOR], keywords)
+				'SetStyle([wxSCI_B_KEYWORD2], keywords2)
+				'SetStyle([wxSCI_B_KEYWORD3], keywords3)
+				'SetStyle([wxSCI_B_KEYWORD4], keywords4)
+				
+				edit.StyleSetForeground(wxSCI_B_KEYWORD, s.style_keyword )
+				edit.StyleSetForeground(wxSCI_B_STRING, s.style_string )
+				edit.StyleSetForeground(wxSCI_B_COMMENT, s.style_comment )
+			
+				DebugLog edit.DescribeKeywordSets()
+				DebugLog edit.GetLexer()
+		EndSelect
+		
+		
+	EndMethod
 EndType
 
+Type TStyle
+	Field lexer:Int = -1
+	Field keywords_1:String = "print function rem end"
+	Field keywords_2:String = "int string float double"
+	Field style_comment:wxColour = wxBLUE()
+	Field style_string:wxColour = wxGREEN()
+	Field style_keyword:wxColour = New wxColour.Create(240, 240, 0) 'Yellow
+	
+	Global _list:TList = New TList
+	
+	Function GetStyle:TStyle(lexer:Int)
+		Local s:TStyle
+
+		For s = EachIn _list
+			If s.lexer = lexer Then Return s
+		Next
+
+		s = New TStyle
+		s.lexer = lexer
+		_list.addlast(s)
+		
+		Return s
+	EndFunction
+EndType
 
 Rem
 Function SYS_CheckIndex:Int()
