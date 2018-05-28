@@ -42,7 +42,7 @@ Import brl.linkedlist
 Import brl.retro
 
 ?Win32
-Import "manifest\wx_rc.o"
+'Import "manifest\rc_32.o"
 ?
 
 '---------------------------------
@@ -322,20 +322,22 @@ EndType
 Type TEditor Extends TConsole
 	
 	Global myEdit:TEditor
-	Global list:TList = New TList
-	'Global e_panel:wxPanel
 	Global e_book:wxFlatNotebook
-	'Global e_sizer:wxBoxSizer = New wxBoxSizer.Create(wxVERTICAL)
 	
-	'Global e_main:TEditor_main
+	Field keywords_1:String
+	Field keywords_2:String
+	Field keywords:String
 	Global _globalID:Int
 	
 	Function Create()
 		myEdit = New TEditor
+		TScintilla._parent = myEdit
 		myEdit.OnInit()
 	EndFunction
 	
 	Method OnInit()
+		
+		LoadKeywords()
 		
 		Local bookStyle:Int = 0
 		
@@ -357,20 +359,23 @@ Type TEditor Extends TConsole
 	EndMethod
 	
 	Method ConnectEvents()
-		'e_toolbar1.connect(userID_REFRESH, wxEVT_COMMAND_TOOL_CLICKED, OnToolRefresh, Null, Self)
-		'e_toolbar3.connect(userID_NEW, wxEVT_COMMAND_TOOL_CLICKED, OnToolRefresh, Null, Self)
-		'e_toolbar3.connect(userID_SEARCH, wxEVT_COMMAND_TOOL_CLICKED, OnToolRefresh, Null, Self)
-		'e_mainListview.Connect(listID_FILTER_WEEK, wxEVT_COMMAND_MENU_SELECTED, OnMenuFilterWeek)
 	EndMethod
 	
 	Method AddNewPage:wxWindow()
 		Local name:String = "untitled" + GetNewID() + ".bmx"
-		Local sci:wxScintilla = New wxScintilla.Create( e_book, wxID_ANY,,,,, 0)
-		
-		Local t:String = "'TESTING~nFunction() ~qHello world~q Hello Double Int 123~n~nRem~ncommented~nEndrem"
-		sci.AddText(t)
-		SetLexerStyle(sci, wxSCI_LEX_BLITZMAX)
+		Local sci:TScintilla = GetNewEdit()
+		If Not sci Then Notify "Error: Could not create scintilla"; Return Null
 		e_book.AddPage(sci , name, True)
+	EndMethod
+	
+	Method GetNewEdit:TScintilla(lexer:Int = wxSCI_LEX_BLITZMAX)
+		Local sci:TScintilla = TScintilla( New TScintilla.Create( e_book, wxID_ANY,,,,, 0) )
+		
+		Local t:String = "'TESTING~nFunction() ~qHello world~q Hello Double Int 123~n~nRem~ncommented~nEndrem~n~n"
+		sci.AddText(t)
+		sci.SetLexerStyle(lexer)
+		
+		Return sci
 	EndMethod
 	
 	Method GetNewID:Int()
@@ -378,9 +383,127 @@ Type TEditor Extends TConsole
 		Return _globalID
 	EndMethod
 	
-	Method SetLexerStyle(edit:wxScintilla, lexer:Int)
+	Method LoadKeywords()
 		
-		If Not edit Then Return
+		keywords_1 = "endrem function print rem"
+		keywords_2 = "double float int string"
+		keywords = keywords_1 + " " + keywords_2
+		
+		DebugLog keywords
+		
+	EndMethod
+	
+EndType
+
+Type TScintilla Extends wxScintilla
+
+	Global _parent:TEditor
+	Field filename:String
+	
+	' margin variables
+	Field lineNrID:Int
+	Field lineNrMargin:Int
+	Field foldingID:Int
+	Field foldingMargin:Int
+	Field dividerID:Int
+
+
+	Method OnInit()
+		
+		
+		AutoCompSetIgnoreCase(True)
+		
+		filename = ""
+		'm_language = Null;
+		
+		lineNrID = 0
+		lineNrMargin = TextWidth(wxSCI_STYLE_LINENUMBER, "_999999")
+		foldingID = 1
+		foldingMargin = 16
+		dividerID = 2
+
+	
+
+
+
+		' set visibility
+		SetVisiblePolicy(wxSCI_VISIBLE_STRICT | wxSCI_VISIBLE_SLOP, 1)
+		SetXCaretPolicy(wxSCI_CARET_EVEN | wxSCI_VISIBLE_STRICT | wxSCI_CARET_SLOP, 1)
+		SetYCaretPolicy(wxSCI_CARET_EVEN | wxSCI_VISIBLE_STRICT | wxSCI_CARET_SLOP, 1)
+		
+		' markers
+		MarkerDefine(wxSCI_MARKNUM_FOLDER, wxSCI_MARK_BOXPLUS)
+		MarkerSetBackground(wxSCI_MARKNUM_FOLDER, New wxColour.CreateNamedColour("BLACK"))
+		MarkerSetForeground(wxSCI_MARKNUM_FOLDER, New wxColour.CreateNamedColour("WHITE"))
+		MarkerDefine(wxSCI_MARKNUM_FOLDEROPEN, wxSCI_MARK_BOXMINUS)
+		MarkerSetBackground(wxSCI_MARKNUM_FOLDEROPEN, New wxColour.CreateNamedColour("BLACK"))
+		MarkerSetForeground(wxSCI_MARKNUM_FOLDEROPEN, New wxColour.CreateNamedColour("WHITE"))
+		MarkerDefine(wxSCI_MARKNUM_FOLDERSUB, wxSCI_MARK_EMPTY)
+		MarkerDefine(wxSCI_MARKNUM_FOLDEREND, wxSCI_MARK_SHORTARROW)
+		MarkerDefine(wxSCI_MARKNUM_FOLDEROPENMID, wxSCI_MARK_ARROWDOWN)
+		MarkerDefine(wxSCI_MARKNUM_FOLDERMIDTAIL, wxSCI_MARK_EMPTY)
+		MarkerDefine(wxSCI_MARKNUM_FOLDERTAIL, wxSCI_MARK_EMPTY)
+
+		' miscelaneous
+		UsePopUp(0)
+		SetLayoutCache(wxSCI_CACHE_PAGE)
+		SetBufferedDraw(1)
+		
+		ConnectAny(wxEVT_KEY_DOWN, OnKeyDown)
+		ConnectAny(wxEVT_SCI_CHARADDED, OnCharAdded)
+		
+	End Method
+	
+	Function OnCharAdded(ev:wxEvent)
+		Local sci:TScintilla = TScintilla( ev.parent )
+		If Not sci Then DebugLog "No sci!"; Return; Else DebugLog "sci found!"
+		
+		Local curPos:Int = sci.GetCurrentPos()
+		Local startPos:Int = sci.WordStartPosition(curPos, True)
+		
+		Local lenEntered:Int = curPos - startPos
+		
+		If lenEntered > 0 Then
+			
+			'DebugLog "OnCharAdded -> lenEntered" 
+			
+			If Not sci.AutoCompActive() Then
+			
+				'DebugLog "OnCharAdded -> Autocomplite. Len = " + lenEntered
+				'DebugLog sci._parent.keywords
+				
+				sci.AutoCompShow(lenEntered, sci._parent.keywords)
+				
+				DebugLog sci.AutoCompActive()
+			EndIf
+		EndIf
+		
+	EndFunction
+	
+	Function OnKeyDown(ev:wxEvent)
+
+		Local key_ev:wxKeyEvent = wxKeyEvent(ev)
+		Local keyCode:Int = key_ev.GetKeyCode()
+		Local sci:TScintilla = TScintilla(ev.sink)
+		If Not sci Then Notify "Scintilla not found!!";Return
+		Local key:String = Chr(keyCode)
+		
+		If key = "F" Then
+			If key_ev.ControlDown() Then
+				
+				Local txt:String = EntryDlg("Find","Find")
+				If txt Then
+					Print sci.FindText(0, 100, txt, wxSCI_WHOLEWORD | wxSCI_MATCHCASE)
+				EndIf
+			EndIf
+		EndIf
+		
+		ev.skip()
+	EndFunction
+	
+
+	
+	Method SetLexerStyle(lexer:Int)
 		
 		Select lexer
 			Case wxSCI_LEX_BLITZMAX
@@ -392,26 +515,24 @@ Type TEditor Extends TConsole
 				
 				' Default style
 				'-----------------------------
-				'edit.StyleResetDefault()
-				'scintilla.Styles[Style.Default].Font = "Consolas";
-				'scintilla.Styles[Style.Default].Size = 10;
+				'sci.StyleResetDefault()
 				
-				Local margin:Int = edit.TextWidth(wxSCI_STYLE_LINENUMBER, "_999999")
+				Local margin:Int = TextWidth(wxSCI_STYLE_LINENUMBER, "_999999")
 				
 				DebugLog margin
 				
 				Local font:wxFont = New wxFont.CreateWithAttribs(16, wxTELETYPE, wxNORMAL, wxNORMAL)
-				edit.SetMarginWidth(0, margin)
-				edit.StyleSetFontFont(wxSCI_STYLE_DEFAULT, font)
+				SetMarginWidth(0, margin)
+				StyleSetFontFont(wxSCI_STYLE_DEFAULT, font)
 				
-				edit.StyleSetForeground(wxSCI_STYLE_DEFAULT, COLOUR_FRONT)
-				edit.StyleSetBackground(wxSCI_STYLE_DEFAULT, COLOUR_BACK)
-				edit.StyleClearAll()
+				StyleSetForeground(wxSCI_STYLE_DEFAULT, COLOUR_FRONT)
+				StyleSetBackground(wxSCI_STYLE_DEFAULT, COLOUR_BACK)
+				StyleClearAll()
 				
-				edit.StyleSetForeground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("DARK GREY"))
-				edit.StyleSetBackground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("LIGHT BLUE"))
-				edit.SetCaretForeground(COLOUR_FRONT)
-				'edit.StyleSetForeground(wxSCI_STYLE_INDENTGUIDE, New wxColour.CreateNamedColour("DARK GREY"))
+				StyleSetForeground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("DARK GREY"))
+				StyleSetBackground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("LIGHT BLUE"))
+				SetCaretForeground(COLOUR_FRONT)
+				'StyleSetForeground(wxSCI_STYLE_INDENTGUIDE, New wxColour.CreateNamedColour("DARK GREY"))
 				
 				'SetViewEOL(commonPrefs.displayEOLEnable)
 				'SetIndentationGuides(commonPrefs.indentGuideEnable)
@@ -427,31 +548,35 @@ Type TEditor Extends TConsole
 				'SetStyle([wxSCI_B_KEYWORD3], keywords3)
 				'SetStyle([wxSCI_B_KEYWORD4], keywords4)
 				
-				'edit.StyleSetBackground(wxSCI_B_DEFAULT, COLOUR_BACK )
-				edit.StyleSetForeground(wxSCI_B_KEYWORD, s.style_keyword_1 )
-				edit.StyleSetForeground(wxSCI_B_KEYWORD2, s.style_keyword_2 )
-				edit.StyleSetForeground(wxSCI_B_STRING, s.style_string )
-				edit.StyleSetForeground(wxSCI_B_NUMBER, s.style_number )
-				edit.StyleSetForeground(wxSCI_B_COMMENT, s.style_comment )
-				edit.StyleSetForeground(wxSCI_B_COMMENTREM, s.style_comment )
+				'StyleSetBackground(wxSCI_B_DEFAULT, COLOUR_BACK )
+				StyleSetForeground(wxSCI_B_KEYWORD, s.style_keyword_1 )
+				StyleSetForeground(wxSCI_B_KEYWORD2, s.style_keyword_2 )
+				StyleSetForeground(wxSCI_B_STRING, s.style_string )
+				StyleSetForeground(wxSCI_B_NUMBER, s.style_number )
+				StyleSetForeground(wxSCI_B_COMMENT, s.style_comment )
+				StyleSetForeground(wxSCI_B_COMMENTREM, s.style_comment )
 				
-				edit.SetLexer(lexer)
-				edit.SetKeywords(0, s.keywords_1)
-				edit.SetKeywords(1, s.keywords_2)
-		
-				DebugLog edit.DescribeKeywordSets()
-				DebugLog edit.GetLexer()
+				SetLexer(lexer)
+				SetKeywords(0, _parent.keywords_1)
+				SetKeywords(1, _parent.keywords_2)
+				
 		EndSelect
 		
+	EndMethod
+	
+End Type
+
+Type TWords
+	Field name:String
+	Field key:String
+	
+	Method Compare:Int(o:Object)
 		
 	EndMethod
 EndType
 
 Type TStyle
 	Field lexer:Int = -1
-	
-	Field keywords_1:String = "print function rem endrem "
-	Field keywords_2:String = "int string float double"
 	
 	Field style_comment:wxColour = New wxColour.Create(130, 210, 230)
 	Field style_string:wxColour = wxGREEN()
@@ -558,6 +683,110 @@ Type TSYS_error
 	EndMethod
 EndType
 EndRem
+
+Function EntryDlg:String(text:String, title:String)
+
+	Local dial:TEntryDialog = New TEntryDialog.Create(text, title)
+	Local value:String = dial.GetString()
+
+	dial.Free()
+	Return value
+EndFunction
+
+Type TEntryDialog Extends wxDialog
+
+	Field m_panel:wxPanel
+	Field m_label1:wxStaticText
+	Field m_field1:wxTextCtrl
+	Field m_staticline:wxStaticLine
+	Field m_sdbSizer:wxStdDialogButtonSizer
+	Field m_sdbSizerCancel:wxButton
+	Field m_sdbSizerOK:wxButton
+	Field text:String
+	Field value:String
+	Field ret:Int
+	
+	Method Create:TEntryDialog(txt:String, title:String)
+		text = txt
+		Return TEntryDialog(Super.Create_(Null, wxID_ANY, title, -1, -1, -1, -1, wxDEFAULT_DIALOG_STYLE))
+	End Method
+
+	Method OnInit()
+
+		Local bSizer1:wxBoxSizer = New wxBoxSizer.Create(wxVERTICAL)
+		Local bSizer2:wxBoxSizer = New wxBoxSizer.Create(wxVERTICAL)
+		Local bSizer3:wxBoxSizer = New wxBoxSizer.Create(wxHORIZONTAL)
+		
+		m_sdbSizer = New wxStdDialogButtonSizer.CreateSizer()
+		m_sdbSizerOK = New wxButton.Create(Self, wxID_OK)
+		m_sdbSizerCancel = New wxButton.Create(Self, wxID_CANCEL)
+		
+		m_panel = New wxPanel.Create(Self, wxID_ANY,,,,, wxTAB_TRAVERSAL)
+		m_panel.SetForegroundColour(New wxColour.Create(0,0,0))
+		m_panel.SetBackgroundColour(New wxColour.Create(255,255,255))
+
+		m_staticline = New wxStaticLine.Create(Self, wxID_ANY,,,,, wxLI_HORIZONTAL)
+		
+		m_label1 = New wxStaticText.Create(m_panel, wxID_ANY, text)
+		m_label1.Wrap(-1)
+		
+		m_field1 = New wxTextCtrl.Create(m_panel, wxID_ANY, "",,,200,,0)
+
+		bSizer2.AddCustomSpacer(0, 15, 1, wxEXPAND, 5)
+		bSizer3.Add(m_label1, 0, wxBOTTOM|wxRIGHT|wxLEFT, 5)
+		bSizer3.Add(m_field1, 0, wxRIGHT|wxLEFT, 5)
+		bSizer2.AddSizer(bSizer3, 1, wxEXPAND, 5)
+		bSizer2.AddCustomSpacer(0, 15, 1, wxEXPAND, 5)
+		bSizer1.Add(m_panel, 1, wxEXPAND, 5)
+		bSizer1.Add(m_staticline, 0, wxEXPAND, 5)
+		m_sdbSizer.AddButton( m_sdbSizerOK)
+		m_sdbSizer.AddButton( m_sdbSizerCancel)
+		bSizer1.AddSizer(m_sdbSizer, 0, wxEXPAND|wxTOP|wxBOTTOM, 10)
+				
+		m_panel.SetSizer(bSizer2)
+		m_panel.Layout()
+		bSizer2.Fit(m_panel)
+
+		m_sdbSizer.Realize()
+		
+		SetSizer(bSizer1)
+		Layout()
+		bSizer1.Fit(Self)
+		Center(wxBOTH)
+		
+		m_sdbSizerCancel.ConnectAny(wxEVT_COMMAND_BUTTON_CLICKED, OnCancel, Null, Self)
+		m_sdbSizerOK.ConnectAny(wxEVT_COMMAND_BUTTON_CLICKED, OnOk, Null, Self)
+		
+		m_sdbSizerOK.SetDefault()
+		m_field1.SetFocus()
+		
+		Centre()
+		ret = ShowModal()
+		
+		If ret Then
+			value = m_field1.GetValue()
+		Else
+			value = ""
+		EndIf
+		
+	End Method
+
+	Method GetString:String()
+		Return value
+	EndMethod
+	
+	Function OnCancel(ev:wxEvent)
+		Local d:TEntryDialog = TEntryDialog(ev.sink)
+		d.EndModal(False)
+	End Function
+
+	Function OnOk(ev:wxEvent)
+		Local d:TEntryDialog = TEntryDialog(ev.sink)
+		d.EndModal(True)
+	End Function
+
+End Type
+
 
 
 Type ArtProvider Extends wxArtProvider
