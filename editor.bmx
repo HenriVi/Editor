@@ -371,7 +371,7 @@ Type TEditor Extends TConsole
 	Method GetNewEdit:TScintilla(lexer:Int = wxSCI_LEX_BLITZMAX)
 		Local sci:TScintilla = TScintilla( New TScintilla.Create( e_book, wxID_ANY,,,,, 0) )
 		
-		Local t:String = "'TESTING~nFunction() ~qHello world~q Hello Double Int 123~n~nRem~ncommented~nEndrem~n~n"
+		Local t:String = "'TESTING~n~qHello world~q Hello Double Int 123~n~nRem~ncommented~nEndrem~n~nFunction Test()~n~tPrint ~qHello world~q~nEndFunction"
 		sci.AddText(t)
 		sci.SetLexerStyle(lexer)
 		
@@ -385,7 +385,7 @@ Type TEditor Extends TConsole
 	
 	Method LoadKeywords()
 		
-		keywords_1 = "endrem function print rem"
+		keywords_1 = "endfunction endrem function print rem"
 		keywords_2 = "double float int string"
 		keywords = keywords_1 + " " + keywords_2
 		
@@ -401,29 +401,33 @@ Type TScintilla Extends wxScintilla
 	Field filename:String
 	
 	' margin variables
-	Field lineNrID:Int
-	Field lineNrMargin:Int
-	Field foldingID:Int
-	Field foldingMargin:Int
-	Field dividerID:Int
-
+	Field lineMargin:Int
+	Field foldMargin:Int
 
 	Method OnInit()
 		
 		
 		AutoCompSetIgnoreCase(True)
 		
-		filename = ""
-		'm_language = Null;
+
+		' Default style
+		'-----------------------------
+		'sci.StyleResetDefault()
 		
-		lineNrID = 0
-		lineNrMargin = TextWidth(wxSCI_STYLE_LINENUMBER, "_999999")
-		foldingID = 1
-		foldingMargin = 16
-		dividerID = 2
+		Local font:wxFont = New wxFont.CreateWithAttribs(16, wxTELETYPE, wxNORMAL, wxNORMAL)
 
-	
-
+		StyleSetFontFont(wxSCI_STYLE_DEFAULT, font)
+		
+		StyleSetForeground(wxSCI_STYLE_DEFAULT, COLOUR_FRONT)
+		StyleSetBackground(wxSCI_STYLE_DEFAULT, COLOUR_BACK)
+		StyleClearAll()
+		
+		'StyleSetForeground(wxSCI_STYLE_INDENTGUIDE, New wxColour.CreateNamedColour("DARK GREY"))
+		
+		'SetViewEOL(commonPrefs.displayEOLEnable)
+		'SetIndentationGuides(commonPrefs.indentGuideEnable)
+		'	' Apply default style
+		'--------------------------------------------------
 
 
 		' set visibility
@@ -431,19 +435,99 @@ Type TScintilla Extends wxScintilla
 		SetXCaretPolicy(wxSCI_CARET_EVEN | wxSCI_VISIBLE_STRICT | wxSCI_CARET_SLOP, 1)
 		SetYCaretPolicy(wxSCI_CARET_EVEN | wxSCI_VISIBLE_STRICT | wxSCI_CARET_SLOP, 1)
 		
+		' margin (folding & lines)
+		Rem
+		// Instruct the lexer to calculate folding
+		scintilla.SetProperty("fold", "1");
+		scintilla.SetProperty("fold.compact", "1");
+
+		// Configure a margin to display folding symbols
+		scintilla.Margins[2].Type = MarginType.Symbol;
+		scintilla.Margins[2].Mask = Marker.MaskFolders;
+		scintilla.Margins[2].Sensitive = true;
+		scintilla.Margins[2].Width = 20;
+		EndRem
+		
+		'SetMargins(0, 2)
+		SetProperty("fold", True)
+		SetProperty("fold.compact", True)
+		SetMarginType(1, wxSCI_MARGIN_SYMBOL)
+		SetMarginMask(1, wxSCI_MASK_FOLDERS)
+		SetMarginSensitive(1, True)
+		
+		'SetFoldFlags(16)
+		lineMargin = TextWidth(wxSCI_STYLE_LINENUMBER, "_999999")
+		foldMargin = 40
+		'SetMarginMask()
+		SetMarginWidth(0, lineMargin)
+		SetMarginWidth(1, foldMargin)
+		SetMarginWidth(2, foldMargin)
+		SetMarginWidth(3, foldMargin)
+		
+		SetFoldFlags(16)
+		Rem
+		// Set colors for all folding markers
+		for (int i = 25; i <= 31; i++)
+		{
+			scintilla.Markers[i].SetForeColor(SystemColors.ControlLightLight);
+			scintilla.Markers[i].SetBackColor(SystemColors.ControlDark);
+		}
+		EndRem
+		For Local i:Int = 25 Until 31
+			MarkerSetBackground(i, New wxColour.CreateNamedColour("GREEN"))
+			MarkerSetForeground(i, New wxColour.CreateNamedColour("GREEN"))
+		Next
+		
+		StyleSetForeground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("DARK GREY"))
+		StyleSetBackground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("LIGHT BLUE"))
+		SetFoldMarginColour(True, New wxColour.CreateNamedColour("BLACK"))
+		SetFoldMarginHiColour(True, New wxColour.CreateNamedColour("WHITE"))
+		StyleSetBackground(wxSCI_STYLE_INDENTGUIDE, New wxColour.CreateNamedColour("DARK GREY"))
+		
+		SetCaretForeground(COLOUR_FRONT)
+		
+		'// Enable automatic folding
+		'scintilla.AutomaticFold = (AutomaticFold.Show | AutomaticFold.Click | AutomaticFold.Change);
+		
+		
 		' markers
+		Rem
 		MarkerDefine(wxSCI_MARKNUM_FOLDER, wxSCI_MARK_BOXPLUS)
-		MarkerSetBackground(wxSCI_MARKNUM_FOLDER, New wxColour.CreateNamedColour("BLACK"))
-		MarkerSetForeground(wxSCI_MARKNUM_FOLDER, New wxColour.CreateNamedColour("WHITE"))
+		MarkerSetBackground(wxSCI_MARKNUM_FOLDER, New wxColour.CreateNamedColour("GREEN"))
+		MarkerSetForeground(wxSCI_MARKNUM_FOLDER, New wxColour.CreateNamedColour("GREEN"))
 		MarkerDefine(wxSCI_MARKNUM_FOLDEROPEN, wxSCI_MARK_BOXMINUS)
-		MarkerSetBackground(wxSCI_MARKNUM_FOLDEROPEN, New wxColour.CreateNamedColour("BLACK"))
-		MarkerSetForeground(wxSCI_MARKNUM_FOLDEROPEN, New wxColour.CreateNamedColour("WHITE"))
+		MarkerSetBackground(wxSCI_MARKNUM_FOLDEROPEN, New wxColour.CreateNamedColour("GREEN"))
+		MarkerSetForeground(wxSCI_MARKNUM_FOLDEROPEN, New wxColour.CreateNamedColour("GREEN"))
 		MarkerDefine(wxSCI_MARKNUM_FOLDERSUB, wxSCI_MARK_EMPTY)
 		MarkerDefine(wxSCI_MARKNUM_FOLDEREND, wxSCI_MARK_SHORTARROW)
 		MarkerDefine(wxSCI_MARKNUM_FOLDEROPENMID, wxSCI_MARK_ARROWDOWN)
 		MarkerDefine(wxSCI_MARKNUM_FOLDERMIDTAIL, wxSCI_MARK_EMPTY)
 		MarkerDefine(wxSCI_MARKNUM_FOLDERTAIL, wxSCI_MARK_EMPTY)
-
+		EndRem
+		
+		SetMarginType(1, wxSCI_MARGIN_SYMBOL)
+		SetMarginMask(1, wxSCI_MASK_FOLDERS)
+		
+		'fold points
+		MarkerDefine(wxSCI_MARKNUM_FOLDER, wxSCI_MARK_BOXPLUS)
+		MarkerDefine(wxSCI_MARKNUM_FOLDEROPEN, wxSCI_MARK_BOXMINUS)
+		
+		MarkerDefine(wxSCI_MARKNUM_FOLDEREND, wxSCI_MARK_SHORTARROW)
+		MarkerDefine(wxSCI_MARKNUM_FOLDEROPENMID, wxSCI_MARK_ARROWDOWN)
+		
+		'lines on fold margin
+		MarkerDefine(wxSCI_MARKNUM_FOLDERSUB, wxSCI_MARK_VLINE)
+		MarkerDefine(wxSCI_MARKNUM_FOLDERMIDTAIL, wxSCI_MARKDOWN_HRULE)
+		MarkerDefine(wxSCI_MARKNUM_FOLDERTAIL, wxSCI_MARKDOWN_HRULE)
+		
+		'cursor
+		For Local i:Int = 0 To 4
+			SetMarginCursor(i, wxSCI_CURSORNORMAL)
+		Next
+		
+		
+		
+		
 		' miscelaneous
 		UsePopUp(0)
 		SetLayoutCache(wxSCI_CACHE_PAGE)
@@ -456,7 +540,7 @@ Type TScintilla Extends wxScintilla
 	
 	Function OnCharAdded(ev:wxEvent)
 		Local sci:TScintilla = TScintilla( ev.parent )
-		If Not sci Then DebugLog "No sci!"; Return; Else DebugLog "sci found!"
+		If Not sci Then DebugLog "No sci!"; Return
 		
 		Local curPos:Int = sci.GetCurrentPos()
 		Local startPos:Int = sci.WordStartPosition(curPos, True)
@@ -465,16 +549,9 @@ Type TScintilla Extends wxScintilla
 		
 		If lenEntered > 0 Then
 			
-			'DebugLog "OnCharAdded -> lenEntered" 
-			
 			If Not sci.AutoCompActive() Then
 			
-				'DebugLog "OnCharAdded -> Autocomplite. Len = " + lenEntered
-				'DebugLog sci._parent.keywords
-				
-				sci.AutoCompShow(lenEntered, sci._parent.keywords)
-				
-				DebugLog sci.AutoCompActive()
+				sci.AutoCompShow(lenEntered, sci._parent.keywords)	
 			EndIf
 		EndIf
 		
@@ -511,33 +588,7 @@ Type TScintilla Extends wxScintilla
 				DebugLog "lexer = wxSCI_LEX_BLITZMAX"
 				
 				Local s:TStyle = TStyle.GetStyle(lexer)
-				
-				
-				' Default style
-				'-----------------------------
-				'sci.StyleResetDefault()
-				
-				Local margin:Int = TextWidth(wxSCI_STYLE_LINENUMBER, "_999999")
-				
-				DebugLog margin
-				
-				Local font:wxFont = New wxFont.CreateWithAttribs(16, wxTELETYPE, wxNORMAL, wxNORMAL)
-				SetMarginWidth(0, margin)
-				StyleSetFontFont(wxSCI_STYLE_DEFAULT, font)
-				
-				StyleSetForeground(wxSCI_STYLE_DEFAULT, COLOUR_FRONT)
-				StyleSetBackground(wxSCI_STYLE_DEFAULT, COLOUR_BACK)
-				StyleClearAll()
-				
-				StyleSetForeground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("DARK GREY"))
-				StyleSetBackground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("LIGHT BLUE"))
-				SetCaretForeground(COLOUR_FRONT)
-				'StyleSetForeground(wxSCI_STYLE_INDENTGUIDE, New wxColour.CreateNamedColour("DARK GREY"))
-				
-				'SetViewEOL(commonPrefs.displayEOLEnable)
-				'SetIndentationGuides(commonPrefs.indentGuideEnable)
-				'	' Apply default style
-				'--------------------------------------------------
+			
 				
 				
 				' Lexer style
