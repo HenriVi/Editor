@@ -295,7 +295,6 @@ Type TConsole Extends TWindow
 	
 	Global myCon:TConsole
 	Global conPanel:wxPanel
-	'Global group1:wxPanel
 	Global conSizer:wxBoxSizer = New wxBoxSizer.Create(wxVERTICAL)
 	
 	Function Create()
@@ -306,10 +305,8 @@ Type TConsole Extends TWindow
 	Method OnInit()
 		
 		conPanel = New wxPanel.Create(myframe, wxID_ANY,,,,, wxTAB_TRAVERSAL)		
-			conPanel.SetBackgroundColour(New wxColour.Create(255, 100, 255) )
-		'group1 = New wxPanel.Create(conPanel, wxID_ANY,,,,, wxTAB_TRAVERSAL)		
-		'group1 = New wxScrolledWindow.Create(conPanel, wxID_ANY,,,,, wxHSCROLL | wxVSCROLL)
-		'group1.SetScrollRate(5, 5)
+		conPanel.SetBackgroundColour(New wxColour.Create(255, 100, 255) )
+
 		w_sizer.Add(conPanel, 1, wxEXPAND, 5)
 		conPanel.SetSizer(conSizer)
 		
@@ -371,9 +368,19 @@ Type TEditor Extends TConsole
 	Method GetNewEdit:TScintilla(lexer:Int = wxSCI_LEX_BLITZMAX)
 		Local sci:TScintilla = TScintilla( New TScintilla.Create( e_book, wxID_ANY,,,,, 0) )
 		
-		Local t:String = "'TESTING~n~qHello world~q Hello Double Int 123~n~nRem~ncommented~nEndrem~n~nFunction Test()~n~tPrint ~qHello world~q~nEndFunction"
+		Local t:String = "'TESTING~n"+..
+						"~qHello world~q Hello Double Int 123~n~n"+..
+						"Rem~n"+..
+						"commented~n"+..
+						"Endrem~n~n"+..
+						"Function Test1()~n"+..
+						"~tPrint ~qHello world1~q~n"+..
+						"EndFunction~n~n"+..
+						"Function Test2()~n"+..
+						"~tPrint ~qHello world2~q~n"+..
+						"End Function~n"
 		sci.AddText(t)
-		sci.SetLexerStyle(lexer)
+		'sci.SetLexerStyle(lexer)
 		
 		Return sci
 	EndMethod
@@ -385,7 +392,7 @@ Type TEditor Extends TConsole
 	
 	Method LoadKeywords()
 		
-		keywords_1 = "endfunction endrem function print rem"
+		keywords_1 = "end endfunction endrem function print rem"
 		keywords_2 = "double float int string"
 		keywords = keywords_1 + " " + keywords_2
 		
@@ -400,143 +407,95 @@ Type TScintilla Extends wxScintilla
 	Global _parent:TEditor
 	Field filename:String
 	
-	' margin variables
-	Field lineMargin:Int
-	Field foldMargin:Int
-
 	Method OnInit()
 		
-		
-		AutoCompSetIgnoreCase(True)
-		
-
 		' Default style
 		'-----------------------------
 		'sci.StyleResetDefault()
-		
 		Local font:wxFont = New wxFont.CreateWithAttribs(16, wxTELETYPE, wxNORMAL, wxNORMAL)
 
 		StyleSetFontFont(wxSCI_STYLE_DEFAULT, font)
-		
 		StyleSetForeground(wxSCI_STYLE_DEFAULT, COLOUR_FRONT)
 		StyleSetBackground(wxSCI_STYLE_DEFAULT, COLOUR_BACK)
 		StyleClearAll()
 		
-		'StyleSetForeground(wxSCI_STYLE_INDENTGUIDE, New wxColour.CreateNamedColour("DARK GREY"))
-		
-		'SetViewEOL(commonPrefs.displayEOLEnable)
-		'SetIndentationGuides(commonPrefs.indentGuideEnable)
-		'	' Apply default style
-		'--------------------------------------------------
-
-
-		' set visibility
-		SetVisiblePolicy(wxSCI_VISIBLE_STRICT | wxSCI_VISIBLE_SLOP, 1)
-		SetXCaretPolicy(wxSCI_CARET_EVEN | wxSCI_VISIBLE_STRICT | wxSCI_CARET_SLOP, 1)
-		SetYCaretPolicy(wxSCI_CARET_EVEN | wxSCI_VISIBLE_STRICT | wxSCI_CARET_SLOP, 1)
-		
-		' margin (folding & lines)
-		Rem
-		// Instruct the lexer to calculate folding
-		scintilla.SetProperty("fold", "1");
-		scintilla.SetProperty("fold.compact", "1");
-
-		// Configure a margin to display folding symbols
-		scintilla.Margins[2].Type = MarginType.Symbol;
-		scintilla.Margins[2].Mask = Marker.MaskFolders;
-		scintilla.Margins[2].Sensitive = true;
-		scintilla.Margins[2].Width = 20;
-		EndRem
-		
-		'SetMargins(0, 2)
-		SetProperty("fold", True)
-		SetProperty("fold.compact", True)
-		SetMarginType(1, wxSCI_MARGIN_SYMBOL)
-		SetMarginMask(1, wxSCI_MASK_FOLDERS)
-		SetMarginSensitive(1, True)
-		
-		'SetFoldFlags(16)
-		lineMargin = TextWidth(wxSCI_STYLE_LINENUMBER, "_999999")
-		foldMargin = 40
-		'SetMarginMask()
-		SetMarginWidth(0, lineMargin)
-		SetMarginWidth(1, foldMargin)
-		SetMarginWidth(2, foldMargin)
-		SetMarginWidth(3, foldMargin)
-		
-		SetFoldFlags(16)
-		Rem
-		// Set colors for all folding markers
-		for (int i = 25; i <= 31; i++)
-		{
-			scintilla.Markers[i].SetForeColor(SystemColors.ControlLightLight);
-			scintilla.Markers[i].SetBackColor(SystemColors.ControlDark);
-		}
-		EndRem
-		For Local i:Int = 25 Until 31
-			MarkerSetBackground(i, New wxColour.CreateNamedColour("GREEN"))
-			MarkerSetForeground(i, New wxColour.CreateNamedColour("GREEN"))
-		Next
+		'Line number margin
+		'-------------------
+		Local MY_LINEMARGIN:Int = 0
+		SetMarginWidth(MY_LINEMARGIN, 70)
 		
 		StyleSetForeground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("DARK GREY"))
 		StyleSetBackground(wxSCI_STYLE_LINENUMBER, New wxColour.CreateNamedColour("LIGHT BLUE"))
-		SetFoldMarginColour(True, New wxColour.CreateNamedColour("BLACK"))
-		SetFoldMarginHiColour(True, New wxColour.CreateNamedColour("WHITE"))
-		StyleSetBackground(wxSCI_STYLE_INDENTGUIDE, New wxColour.CreateNamedColour("DARK GREY"))
 		
+		'Fold margin
+		'---------------
+		Local MY_FOLDMARGIN:Int = 1
+		SetMarginWidth(MY_FOLDMARGIN, 14)
+		SetMarginMask(MY_FOLDMARGIN,wxSCI_MASK_FOLDERS)
+		
+		SetFoldMarginColour(True, New wxColour.CreateNamedColour("LIGHT BLUE"))		'Create(150, 210, 240))
+		SetFoldMarginHiColour(True, New wxColour.Create(160, 160, 160))
+		
+		'Set up the markers that will be shown in the fold margin
+		MarkerDefine(wxSCI_MARKNUM_FOLDEREND,wxSCI_MARK_BOXPLUSCONNECTED)
+		MarkerSetForeground(wxSCI_MARKNUM_FOLDEREND, New wxColour.Create(243,243,243))
+		MarkerSetBackground(wxSCI_MARKNUM_FOLDEREND, New wxColour.Create(128,128,128))
+		MarkerDefine(wxSCI_MARKNUM_FOLDEROPENMID,wxSCI_MARK_BOXMINUSCONNECTED)
+		MarkerSetForeground(wxSCI_MARKNUM_FOLDEROPENMID, New wxColour.Create(243,243,243))
+		MarkerSetBackground(wxSCI_MARKNUM_FOLDEROPENMID, New wxColour.Create(128,128,128))
+		MarkerDefine(wxSCI_MARKNUM_FOLDERMIDTAIL, wxSCI_MARK_TCORNER)
+		MarkerSetForeground(wxSCI_MARKNUM_FOLDERMIDTAIL, New wxColour.Create(243,243,243))
+		MarkerSetBackground(wxSCI_MARKNUM_FOLDERMIDTAIL, New wxColour.Create(128,128,128))
+		MarkerDefine(wxSCI_MARKNUM_FOLDERTAIL,wxSCI_MARK_LCORNER)
+		MarkerSetForeground(wxSCI_MARKNUM_FOLDERTAIL, New wxColour.Create(243,243,243))
+		MarkerSetBackground(wxSCI_MARKNUM_FOLDERTAIL, New wxColour.Create(128,128,128))
+		MarkerDefine(wxSCI_MARKNUM_FOLDERSUB,wxSCI_MARK_VLINE)
+		MarkerSetForeground(wxSCI_MARKNUM_FOLDERSUB, New wxColour.Create(243,243,243))
+		MarkerSetBackground(wxSCI_MARKNUM_FOLDERSUB, New wxColour.Create(128,128,128))
+		MarkerDefine(wxSCI_MARKNUM_FOLDER,wxSCI_MARK_BOXPLUS)
+		MarkerSetForeground(wxSCI_MARKNUM_FOLDER, New wxColour.Create(243,243,243))
+		MarkerSetBackground(wxSCI_MARKNUM_FOLDER, New wxColour.Create(128,128,128))
+		MarkerDefine(wxSCI_MARKNUM_FOLDEROPEN,wxSCI_MARK_BOXMINUS)
+		MarkerSetForeground(wxSCI_MARKNUM_FOLDEROPEN, New wxColour.Create(243,243,243))
+		MarkerSetBackground(wxSCI_MARKNUM_FOLDEROPEN, New wxColour.Create(128,128,128))
+		
+		'Turn the fold markers red when the caret is a line in the group (optional)
+		MarkerEnableHighlight(True)
+		
+		'The margin will only respond To clicks If it set sensitive.
+		SetMarginSensitive(MY_FOLDMARGIN,True)
+		
+		'Set color For G-Code highlighting
+		StyleSetForeground(19, New wxColour.Create(255, 130, 0) )
+		
+		'Caret
+		'------
 		SetCaretForeground(COLOUR_FRONT)
 		
-		'// Enable automatic folding
-		'scintilla.AutomaticFold = (AutomaticFold.Show | AutomaticFold.Click | AutomaticFold.Change);
+		'Set default lexer
+		'------------------
+		SetLexerStyle(wxSCI_LEX_BLITZMAX)
+		SetProperty("fold", True)
+		SetProperty("fold.compact", False)
 		
+		'Miscellaneous
+		'-------------
+		AutoCompSetIgnoreCase(True)
+		SetTabWidth(3)
 		
-		' markers
-		Rem
-		MarkerDefine(wxSCI_MARKNUM_FOLDER, wxSCI_MARK_BOXPLUS)
-		MarkerSetBackground(wxSCI_MARKNUM_FOLDER, New wxColour.CreateNamedColour("GREEN"))
-		MarkerSetForeground(wxSCI_MARKNUM_FOLDER, New wxColour.CreateNamedColour("GREEN"))
-		MarkerDefine(wxSCI_MARKNUM_FOLDEROPEN, wxSCI_MARK_BOXMINUS)
-		MarkerSetBackground(wxSCI_MARKNUM_FOLDEROPEN, New wxColour.CreateNamedColour("GREEN"))
-		MarkerSetForeground(wxSCI_MARKNUM_FOLDEROPEN, New wxColour.CreateNamedColour("GREEN"))
-		MarkerDefine(wxSCI_MARKNUM_FOLDERSUB, wxSCI_MARK_EMPTY)
-		MarkerDefine(wxSCI_MARKNUM_FOLDEREND, wxSCI_MARK_SHORTARROW)
-		MarkerDefine(wxSCI_MARKNUM_FOLDEROPENMID, wxSCI_MARK_ARROWDOWN)
-		MarkerDefine(wxSCI_MARKNUM_FOLDERMIDTAIL, wxSCI_MARK_EMPTY)
-		MarkerDefine(wxSCI_MARKNUM_FOLDERTAIL, wxSCI_MARK_EMPTY)
-		EndRem
-		
-		SetMarginType(1, wxSCI_MARGIN_SYMBOL)
-		SetMarginMask(1, wxSCI_MASK_FOLDERS)
-		
-		'fold points
-		MarkerDefine(wxSCI_MARKNUM_FOLDER, wxSCI_MARK_BOXPLUS)
-		MarkerDefine(wxSCI_MARKNUM_FOLDEROPEN, wxSCI_MARK_BOXMINUS)
-		
-		MarkerDefine(wxSCI_MARKNUM_FOLDEREND, wxSCI_MARK_SHORTARROW)
-		MarkerDefine(wxSCI_MARKNUM_FOLDEROPENMID, wxSCI_MARK_ARROWDOWN)
-		
-		'lines on fold margin
-		MarkerDefine(wxSCI_MARKNUM_FOLDERSUB, wxSCI_MARK_VLINE)
-		MarkerDefine(wxSCI_MARKNUM_FOLDERMIDTAIL, wxSCI_MARKDOWN_HRULE)
-		MarkerDefine(wxSCI_MARKNUM_FOLDERTAIL, wxSCI_MARKDOWN_HRULE)
-		
-		'cursor
-		For Local i:Int = 0 To 4
-			SetMarginCursor(i, wxSCI_CURSORNORMAL)
-		Next
-		
-		
-		
-		
-		' miscelaneous
 		UsePopUp(0)
 		SetLayoutCache(wxSCI_CACHE_PAGE)
 		SetBufferedDraw(1)
 		
+		ConnectEvents()
+	End Method
+	
+	Method ConnectEvents()
+	
 		ConnectAny(wxEVT_KEY_DOWN, OnKeyDown)
 		ConnectAny(wxEVT_SCI_CHARADDED, OnCharAdded)
-		
-	End Method
+		ConnectAny(wxEVT_SCI_MARGINCLICK, OnMarginClick)	
+	EndMethod
 	
 	Function OnCharAdded(ev:wxEvent)
 		Local sci:TScintilla = TScintilla( ev.parent )
@@ -554,7 +513,6 @@ Type TScintilla Extends wxScintilla
 				sci.AutoCompShow(lenEntered, sci._parent.keywords)	
 			EndIf
 		EndIf
-		
 	EndFunction
 	
 	Function OnKeyDown(ev:wxEvent)
@@ -578,7 +536,29 @@ Type TScintilla Extends wxScintilla
 		ev.skip()
 	EndFunction
 	
-
+	Function OnMarginClick(ev:wxEvent)
+	
+		'DebugLog "OnMarginClicked"
+		
+		Local sci:TScintilla = TScintilla( ev.parent )
+		If Not sci Then DebugLog "OnMarginClicked -> No sci!"; Return
+		
+		Local sev:wxScintillaEvent = wxScintillaEvent(ev)
+		If Not sev Then DebugLog "OnMarginClicked -> No ScintillaEvent!"; Return
+		
+		Local margin:Int	= sev.GetMargin()
+		Local position:Int	= sev.GetPosition()
+		Local line:Int		= sci.LineFromPosition(position)
+		Local foldLevel:Int = sci.GetFoldLevel(line)
+		
+		Local headerFlag:Int = (foldLevel & wxSCI_FOLDLEVELHEADERFLAG)
+		
+		DebugLog foldLevel + " | " + headerFlag
+		
+		If (margin = 1 And headerFlag) Then		
+			sci.ToggleFold(line)
+		EndIf
+	EndFunction
 	
 	Method SetLexerStyle(lexer:Int)
 		
@@ -588,20 +568,11 @@ Type TScintilla Extends wxScintilla
 				DebugLog "lexer = wxSCI_LEX_BLITZMAX"
 				
 				Local s:TStyle = TStyle.GetStyle(lexer)
-			
 				
-				
-				' Lexer style
-				
-				'etStyle([wxSCI_B_COMMENT, wxSCI_B_COMMENTREM], comments)
-				'SetStyle([wxSCI_B_KEYWORD, wxSCI_B_CONSTANT, wxSCI_B_PREPROCESSOR], keywords)
-				'SetStyle([wxSCI_B_KEYWORD2], keywords2)
-				'SetStyle([wxSCI_B_KEYWORD3], keywords3)
-				'SetStyle([wxSCI_B_KEYWORD4], keywords4)
-				
-				'StyleSetBackground(wxSCI_B_DEFAULT, COLOUR_BACK )
 				StyleSetForeground(wxSCI_B_KEYWORD, s.style_keyword_1 )
 				StyleSetForeground(wxSCI_B_KEYWORD2, s.style_keyword_2 )
+				StyleSetForeground(wxSCI_B_CONSTANT, s.style_keyword_1 )
+				StyleSetForeground(wxSCI_B_PREPROCESSOR, s.style_keyword_1 )
 				StyleSetForeground(wxSCI_B_STRING, s.style_string )
 				StyleSetForeground(wxSCI_B_NUMBER, s.style_number )
 				StyleSetForeground(wxSCI_B_COMMENT, s.style_comment )
@@ -651,89 +622,6 @@ Type TStyle
 		Return s
 	EndFunction
 EndType
-
-Rem
-Function SYS_CheckIndex:Int()
-	Local sql:String
-	sql =	"SELECT a.name, b.name, a.create_table, a.create_sql FROM sys_index a " + ..
-			"LEFT JOIN sqlite_master b ON a.name=b.name " + ..
-			"WHERE b.name Is Null"
-	If Not OpenTX() Then Return False
-	Local query:TDatabaseQuery = txdb.executequery(sql)
-	If txdb.hasError() errorAndClose(txdb, sql) ; Return False
-	
-	While query.nextrow()
-		Local rec:TQueryRecord = query.rowrecord()
-		Local se:TSYS_error = New TSYS_error
-		se.index_name		= rec.value(0).getstring()
-		se.create_table		= rec.value(2).getstring()
-		se.create_sql		= rec.value(3).getstring()
-		se.error = "Missing index: " + se.index_name
-	Wend
-	CloseTX()
-	
-	If Not TSYS_error.list Return True
-	For Local se:TSYS_error = EachIn TSYS_error.list
-		If Not se.CreateIndex() Return False
-		DebugLog "Creating index " + se.index_name
-	Next
-	TSYS_error.list.clear(); TSYS_error.list = Null
-	
-	Return True	
-EndFunction
-EndRem
-
-Rem
-Function SYS_WriteLog:Int(error:String)
-	If Not error Then Return False
-	
-	Local se:TSYS_error = New TSYS_error
-	se.error = error.Trim()
-	se.WriteLog()
-	
-	Return True
-EndFunction
-
-Type TSYS_error
-	Field index_name:String
-	Field create_table:String
-	Field create_sql:String
-	Field error:String
-	Global list:TList
-	
-	Method New()
-		If list = Null list = New TList
-		list.addlast(Self)
-	EndMethod
-	
-	Method CreateIndex:Int()
-		'If Not OpenTX() Return False
-		
-		'Recreate missing index
-		txdb.executequery(create_sql)
-		If txdb.haserror() Then errorAndClose(txdb, create_sql) ; Return False
-		
-		'Write log entry
-		WriteLog()
-		
-		'CloseTX()
-		Return True
-	EndMethod
-	
-	'Write log entry
-	Method WriteLog:Int()
-		
-		'If Not OpenTX() Then Return False
-		Local sql:String = "INSERT INTO sys_error(id, createdate, createuser, error) " + ..
-							"VALUES(Null,'" + datetime() + "','" + globalUserShort + "','" + error + "')"
-		txdb.executequery(sql)
-		If txdb.haserror() Then errorAndClose(txdb, sql) ; Return False
-		'CloseTX()
-		
-		Return True
-	EndMethod
-EndType
-EndRem
 
 Function EntryDlg:String(text:String, title:String)
 
