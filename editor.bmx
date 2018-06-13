@@ -1,9 +1,6 @@
 
 '
-' Editor
-'
-'
-'
+' Editor for Blitzmax
 '
 
 SuperStrict
@@ -49,7 +46,7 @@ Import brl.retro
 'Application info
 '---------------------------------
 Const APP_TITLE:String = "Editor"
-Const APP_VERSION:String = "0.1"	' 
+Const APP_VERSION:String = "0.1.1"	' 
 '----------------------------------
 
 
@@ -275,7 +272,7 @@ Type TWindow Extends TApp
 	EndFunction
 
 	Function OnToolOpen(ev:wxEvent)
-		
+		TEditor.myEdit.AddNewPage(True)
 	EndFunction
 
 	Function OnToolClose(ev:wxEvent)
@@ -324,6 +321,8 @@ Type TEditor Extends TConsole
 	Field keywords_1:String
 	Field keywords_2:String
 	Field keywords:String
+	
+	Global _sciList:TList = New TList
 	Global _globalID:Int
 	
 	Function Create()
@@ -358,29 +357,55 @@ Type TEditor Extends TConsole
 	Method ConnectEvents()
 	EndMethod
 	
-	Method AddNewPage:wxWindow()
-		Local name:String = "untitled" + GetNewID() + ".bmx"
+	Method AddNewPage:Int(openFlag:Int = False)
+		
+		Local name:String, url:String
+		
+		If openFlag Then
+			url = RequestFile("Open file...", "bmx",, CurrentDir() )
+			If Not url Then Return False
+			name = StripDir(url)
+		Else
+			name = "untitled" + GetNewID() + ".bmx"
+		EndIf
+		
 		Local sci:TScintilla = GetNewEdit()
-		If Not sci Then Notify "Error: Could not create scintilla"; Return Null
+		If Not sci Then Notify "Error: Could not create scintilla"; Return False
+		
+		If openFlag Then
+			If Not sci.LoadFile(url) Then Return False
+		EndIf
+		
+		sci.SetFoldLevels(0, sci.GetLineCount() )
+		
+		_sciList.AddLast(sci)
 		e_book.AddPage(sci , name, True)
+		
+		Return True
 	EndMethod
 	
 	Method GetNewEdit:TScintilla(lexer:Int = wxSCI_LEX_BLITZMAX)
 		Local sci:TScintilla = TScintilla( New TScintilla.Create( e_book, wxID_ANY,,,,, 0) )
 		
 		Local t:String = "'TESTING~n"+..
-						"~qHello world~q Hello Double Int 123~n~n"+..
+						"~qHello world~q Hello Double Int 123~n~n"	'+..
+						
+						Rem
+						"Extern~n"+..
+						"~tFunction D(a:int, b:int, c:int)~n"+..
+						"EndExtern~n~n"+..
 						"Rem~n"+..
 						"commented~n"+..
 						"Endrem~n~n"+..
 						"Function Test1()~n"+..
 						"~tPrint ~qHello world1~q~n"+..
 						"EndFunction~n~n"+..
+						"~nConst MY_CONSTANT:Int = 123~n~n"+ ..
 						"Function Test2()~n"+..
 						"~tPrint ~qHello world2~q~n"+..
-						"End Function~n"
+						"End Function"
+						EndRem
 		sci.AddText(t)
-		'sci.SetLexerStyle(lexer)
 		
 		Return sci
 	EndMethod
@@ -392,11 +417,15 @@ Type TEditor Extends TConsole
 	
 	Method LoadKeywords()
 		
-		keywords_1 = "end endfunction endrem function print rem"
-		keywords_2 = "double float int string"
-		keywords = keywords_1 + " " + keywords_2
+		Local keywords_1:String, keywords_2:String
 		
-		DebugLog keywords
+		keywords_1 = "Const Else End EndExtern EendFunction EndIf EndRem EndType Extern False Field Function "+..
+					"Global If Import Local New Null Print Rem Return SizeOf Then True Type"
+		keywords_2 = "Byte Double Float Int Long Ptr String"
+		
+		TWord.LoadKeywords(keywords_1, wxSCI_B_KEYWORD)
+		TWord.LoadKeywords(keywords_2, wxSCI_B_KEYWORD2)
+		TWord.SetKeywords()
 		
 	EndMethod
 	
@@ -406,6 +435,7 @@ Type TScintilla Extends wxScintilla
 
 	Global _parent:TEditor
 	Field filename:String
+	Field _charsEntered:Int
 	
 	Method OnInit()
 		
@@ -474,16 +504,17 @@ Type TScintilla Extends wxScintilla
 		
 		'Set default lexer
 		'------------------
-		SetLexerStyle(wxSCI_LEX_BLITZMAX)
-		SetProperty("fold", True)
-		SetProperty("fold.compact", False)
+		SetLexerStyle(wxSCI_LEX_BLITZMAX)		'wxSCI_LEX_CONTAINER)	'
+		'SetProperty("fold", True)	'Use custom folding
+		'SetProperty("fold.compact", False)
+		'SetProperty("fold.basic.syntax.based", True)
 		
 		'Miscellaneous
 		'-------------
 		AutoCompSetIgnoreCase(True)
 		SetTabWidth(3)
 		
-		UsePopUp(0)
+		UsePopUp(1)
 		SetLayoutCache(wxSCI_CACHE_PAGE)
 		SetBufferedDraw(1)
 		
@@ -493,18 +524,31 @@ Type TScintilla Extends wxScintilla
 	Method ConnectEvents()
 	
 		ConnectAny(wxEVT_KEY_DOWN, OnKeyDown)
-		ConnectAny(wxEVT_SCI_CHARADDED, OnCharAdded)
-		ConnectAny(wxEVT_SCI_MARGINCLICK, OnMarginClick)	
+		'ConnectAny(wxEVT_SCI_CHARADDED, OnCharAdded)
+		ConnectAny(wxEVT_SCI_MARGINCLICK, OnMarginClick)
+		ConnectAny(wxEVT_SCI_MODIFIED, OnModified)
+		ConnectAny(wxEVT_SCI_STYLENEEDED, OnStyleNeeded)
+		'ConnectAny(wxEVT_SCI_CHANGE, OnChange)
 	EndMethod
 	
-	Function OnCharAdded(ev:wxEvent)
+	Rem
+	Function OnChange(ev:wxEvent)
 		Local sci:TScintilla = TScintilla( ev.parent )
 		If Not sci Then DebugLog "No sci!"; Return
 		
+		'DebugLog "OnChange"
+		Local sev:wxScintillaEvent = wxScintillaEvent(ev)
+		If Not sev Then DebugLog "OnChange -> No ScintillaEvent!"; Return
+				
 		Local curPos:Int = sci.GetCurrentPos()
 		Local startPos:Int = sci.WordStartPosition(curPos, True)
-		
+		'Local chars:String = sci.getWordChars()
 		Local lenEntered:Int = curPos - startPos
+		
+		
+		DebugLog "OnChange -> lenEntered = " + lenEntered + " | start = " + startPos + " | curPos = " + curPos + " | Key = " + sev.GetModificationType()
+		
+		'Return
 		
 		If lenEntered > 0 Then
 			
@@ -512,7 +556,106 @@ Type TScintilla Extends wxScintilla
 			
 				sci.AutoCompShow(lenEntered, sci._parent.keywords)	
 			EndIf
+		Else
+			curPos:-1
+			startPos = sci.WordStartPosition(curPos, True)
+			lenEntered = curPos - startPos
+			If lenEntered < 1 Then Return
+			
+			'DebugLog "OnCharAdded -> lenEntered = " + lenEntered + " | start = " + startPos + " | curPos = " + curPos + " | " 
+			DebugLog "OnChange -> *" + sci.GetTextRange(startPos, curPos) + "*"
 		EndIf
+	EndFunction
+	
+	Function OnCharAdded(ev:wxEvent)
+		Local sci:TScintilla = TScintilla( ev.parent )
+		If Not sci Then DebugLog "No sci!"; Return
+		
+		'DebugLog sci.GetCurrentLine()
+		
+		Local curPos:Int = sci.GetCurrentPos()
+		Local startPos:Int = sci.WordStartPosition(curPos, True)
+		'Local chars:String = sci.getWordChars()
+		Local lenEntered:Int = curPos - startPos
+		
+		DebugLog "OnCharAdded -> lenEntered = " + lenEntered + " | start = " + startPos + " | curPos = " + curPos + " | "
+		
+		If lenEntered > 0 Then
+			
+			If Not sci.AutoCompActive() Then
+			
+				sci.AutoCompShow(lenEntered, sci._parent.keywords)	
+			EndIf
+		Else
+			curPos:-1
+			startPos = sci.WordStartPosition(curPos, True)
+			lenEntered = curPos - startPos
+			If lenEntered < 1 Then Return
+			
+			'DebugLog "OnCharAdded -> lenEntered = " + lenEntered + " | start = " + startPos + " | curPos = " + curPos + " | " 
+			DebugLog "OnCharAdded -> *" + sci.GetTextRange(startPos, curPos) + "*"
+		EndIf
+	EndFunction
+	EndRem
+	
+	Function OnModified(ev:wxEvent)
+		
+		'DebugLog "OnModified"
+		
+		'Return
+		
+		Local sci:TScintilla = TScintilla( ev.parent )
+		If Not sci Then DebugLog "No sci!"; Return
+		
+		Local sev:wxScintillaEvent = wxScintillaEvent(ev)
+		If Not sev Then DebugLog "OnModified -> No ScintillaEvent!"; Return
+		
+		Local modType:Int = sev.GetModificationType()
+		
+		If modType & wxSCI_MOD_INSERTTEXT Then
+			
+			'DebugLog "wxSCI_MOD_INSERTTEXT"
+			
+			Local curPos:Int = sci.GetCurrentPos()
+			Local startPos:Int = sci.WordStartPosition(curPos, True)
+			'Local chars:String = sci.getWordChars()
+			Local lenEntered:Int = curPos - startPos
+			Local txt:String = sev.GetText()	'.Trim()
+			
+			DebugLog "OnModified -> lenEntered = " + lenEntered + " | start = " + startPos + " | curPos = " + curPos + " | text = " + txt
+			
+			If ( txt.Trim() ) Then
+				If lenEntered > 0 Then
+					
+					If Not sci.AutoCompActive() Then
+					
+						sci.AutoCompShow(lenEntered, TWord.GetAutoKeywords() )	'sci._parent.keywords)	
+					EndIf
+				ElseIf txt.length > 1	'Paste
+					sci.AutoCapitalize(startPos, startPos + txt.length, False)	'DebugLog "*" + txt + "*"
+				EndIf
+			
+			ElseIf lenEntered > 0
+			
+				'Check word
+				startPos = sci.WordStartPosition(curPos, True)
+				lenEntered = curPos - startPos
+				If lenEntered < 1 Then Return
+					
+				'DebugLog "OnCharAdded -> lenEntered = " + lenEntered + " | start = " + startPos + " | curPos = " + curPos + " | " 
+				sci.AutoCapitalize(startPos, curPos, True)	'DebugLog "OnModified -> *" + sci.GetTextRange(startPos, curPos) + "*"
+			EndIf
+			
+			'DebugLog " = " + sev.GetModificationType() ) + " | " + sev.GetPosition() + " | " + sev.GetLine()
+		EndIf
+		
+		If modType & wxSCI_MOD_DELETETEXT Then DebugLog "wxSCI_MOD_DELETETEXT"
+		If modType & wxSCI_MOD_DELETETEXT Then DebugLog "wxSCI_MOD_DELETETEXT"
+		'If modType & wxSCI_MOD_CHANGESTYLE Then DebugLog "wxSCI_MOD_CHANGESTYLE"
+		'If modType & wxSCI_MOD_CHANGEFOLD Then DebugLog "wxSCI_MOD_CHANGEFOLD"
+		'If modType & wxSCI_PERFORMED_USER Then DebugLog "wxSCI_PERFORMED_USER"
+		'If modType & wxSCI_PERFORMED_UNDO Then DebugLog "wxSCI_PERFORMED_UNDO"
+		
 	EndFunction
 	
 	Function OnKeyDown(ev:wxEvent)
@@ -522,6 +665,15 @@ Type TScintilla Extends wxScintilla
 		Local sci:TScintilla = TScintilla(ev.sink)
 		If Not sci Then Notify "Scintilla not found!!";Return
 		Local key:String = Chr(keyCode)
+		
+		'DebugLog key + " | " + keyCode
+		
+		Select keyCode
+		
+			Case 9, 13, 32	'Tab, Enter, Space
+				
+			
+		EndSelect
 		
 		If key = "F" Then
 			If key_ev.ControlDown() Then
@@ -555,10 +707,131 @@ Type TScintilla Extends wxScintilla
 		
 		DebugLog foldLevel + " | " + headerFlag
 		
+		For Local i:Int = 0 Until sci.GetLineCount()
+			Print sci.GetFoldLevel(i) + " | " + sci.Getline(i).Trim() + " | " + sci.GetFoldParent(i)
+		Next
+		
 		If (margin = 1 And headerFlag) Then		
 			sci.ToggleFold(line)
 		EndIf
+		
+		
 	EndFunction
+	
+	Function OnStyleNeeded(ev:wxEvent)
+		
+		DebugLog "OnStyleNeeded"
+		Rem
+		void myFrame::OnStyleNeeded(wxStyledTextEvent& event) {
+		/*this is called every time the styler detects a line that needs style, so we style that range.
+		This will save a lot of performance since we only style text when needed instead of parsing the whole file every time.*/
+		size_t line_end=m_activeSTC->LineFromPosition(m_activeSTC->GetCurrentPos());
+		size_t line_start=m_activeSTC->LineFromPosition(m_activeSTC->GetEndStyled());
+		/*fold level: May need to include the two lines in front because of the fold level these lines have- the line above
+		may be affected*/
+		if(line_start>1) {
+			line_start-=2;
+		} else {
+			line_start=0;
+		}
+		//if it is so small that all lines are visible, style the whole document
+		if(m_activeSTC->GetLineCount()==m_activeSTC->LinesOnScreen()){
+			line_start=0;
+			line_end=m_activeSTC->GetLineCount()-1;
+		}
+		if(line_end<line_start) {
+			//that happens when you select parts that are in front of the styled area
+			size_t temp=line_end;
+			line_end=line_start;
+			line_start=temp;
+		}
+		//style the line following the style area too (if present) in case fold level decreases in that one
+		if(line_end<m_activeSTC->GetLineCount()-1){
+			line_end++;
+		}
+		//get exact start positions
+		size_t startpos=m_activeSTC->PositionFromLine(line_start);
+		size_t endpos=(m_activeSTC->GetLineEndPosition(line_end));
+		int startfoldlevel=m_activeSTC->GetFoldLevel(line_start);
+		startfoldlevel &= wxSTC_FOLDFLAG_LEVELNUMBERS; //mask out the flags and only use the fold level
+		wxString text=m_activeSTC->GetTextRange(startpos,endpos).Upper();
+		//call highlighting function
+		this->highlightSTCsyntax(startpos,endpos,text);
+		//calculate and apply foldings
+		this->setfoldlevels(startpos,startfoldlevel,text);
+	 }
+		
+		EndRem
+	EndFunction
+	
+	Method AutoCapitalize(startPos:Int, endPos:Int, single:Int = True)
+		If Not TOptions.opt.autoCap Then Return
+		
+		DebugLog "AutoCapitalize -> start = " + startPos + " |end = " + endPos + " |txt = " + GetTextRange(startPos, endPos)
+		
+		Local style:Int
+		
+		If single Then
+			style = GetStyleAt(startPos)
+			If style = wxSCI_B_KEYWORD Or style = wxSCI_B_KEYWORD2 Then
+				'Todo
+			EndIf
+		Else
+			For Local i:Int = startPos To endPos
+				style = GetStyleAt(startPos)
+				If style = wxSCI_B_KEYWORD Or style = wxSCI_B_KEYWORD2 Then
+					'Todo
+				EndIf
+			Next
+		EndIf
+		
+	EndMethod
+	
+	Method SetFoldLevels(start:Int, stop:Int)
+		
+		Local s:String, e:Int, r:Int, level:Int = GetFoldLevel(start)	'wxSCI_FOLDLEVELBASE
+		
+		For Local i:Int = start Until stop
+			
+			s = GetLine(i).Trim().tolower()
+			
+			SetFoldLevel(i, level)
+			
+			If s.StartsWith("extern") Then
+				SetFoldLevel(i, level | wxSCI_FOLDLEVELHEADERFLAG)
+				e = True; level:+1
+			ElseIf s.StartsWith("rem")
+				SetFoldLevel(i, level | wxSCI_FOLDLEVELHEADERFLAG)
+				r = True; level:+1
+			ElseIf s.StartsWith("function")
+				If e Then Continue
+				SetFoldLevel(i, level | wxSCI_FOLDLEVELHEADERFLAG)
+				level:+1
+			ElseIf s.StartsWith("end")
+				If s.StartsWith("endextern") Or s.startswith("end extern")
+					e = False; level:-1
+					'SetFoldLevel(i, wxSCI_FOLDLEVELBASE)
+					Continue
+				EndIf
+				If s.startswith("endfunction") Or s.startswith("end function")
+					level:-1
+					'SetFoldLevel(i, wxSCI_FOLDLEVELBASE)
+					Continue
+				EndIf
+				If s.startswith("endrem") Or s.startswith("end rem")
+					level:-1
+					'SetFoldLevel(i, wxSCI_FOLDLEVELBASE)
+					Continue
+				EndIf
+			EndIf	
+		Next
+		
+		For Local i:Int = 0 Until GetLineCount()	
+			Print GetFoldLevel(i) + " | " + Getline(i).Trim() + " | " + GetFoldParent(i)
+		Next
+	
+	EndMethod
+	
 	
 	Method SetLexerStyle(lexer:Int)
 		
@@ -579,21 +852,99 @@ Type TScintilla Extends wxScintilla
 				StyleSetForeground(wxSCI_B_COMMENTREM, s.style_comment )
 				
 				SetLexer(lexer)
-				SetKeywords(0, _parent.keywords_1)
-				SetKeywords(1, _parent.keywords_2)
+				SetKeywords(0, TWord.GetKeyWords(wxSCI_B_KEYWORD) )	'_parent.keywords_1)
+				SetKeywords(1, TWord.GetKeyWords(wxSCI_B_KEYWORD2))	'_parent.keywords_2)
 				
 		EndSelect
 		
 	EndMethod
 	
+	
 End Type
 
-Type TWords
+Type TOptions
+	Global opt:TOptions = New TOptions
+	Field autoCap:Int = True
+	
+	Method LoadOptions()
+		
+	EndMethod
+EndType
+
+Type TWord
+	Global _autoKeywords:String	' Used for autocompletion
+	Global _keywords1:String, _keywords2:String
+	
+	Field style:Int
 	Field name:String
 	Field key:String
 	
-	Method Compare:Int(o:Object)
+	Global _wordList:TList = New TList
+	
+	Function LoadKeywords:Int(words:String, style:Int = wxSCI_B_KEYWORD)
 		
+		If Not words Then Notify "Error: Keywords not found.",True; Return False
+		
+		Local w:TWord
+		Local ar:String[] = words.split(" ")
+		
+		If Not ar Then Notify "Error: Could not create keywords.",True; Return False
+		
+		For Local i:Int = 0 Until ar.length
+			
+			If Not ar[i].Trim() Then Continue
+			
+			w = New TWord
+			w.style	= style
+			w.name	= ar[i]
+			w.key	= ar[i].tolower()
+			
+			_wordList.addlast(w)
+		Next
+		
+		Return True
+	EndFunction
+	
+	Function GetKeywords:String(style:Int = wxSCI_B_KEYWORD)
+		If style = wxSCI_B_KEYWORD2 Then
+			Return _keywords2
+		Else
+			Return _keywords1
+		EndIf
+	EndFunction
+	
+	Function GetAutoKeywords:String()
+		Return _autoKeywords
+	EndFunction
+	
+	Function SetKeywords()
+		If Not _wordList.count() Then Return
+		_wordList.sort(False)
+		
+		_autoKeywords = ""
+		_keywords1 = ""
+		_keywords2 = ""
+		
+		For Local w:TWord = EachIn _wordList
+			
+			If Not w.key Then Continue
+			
+			If _autoKeywords Then _autoKeywords:+ " "
+			_autoKeywords:+ w.key
+			
+			If w.style = wxSCI_B_KEYWORD2
+				If _keywords2 Then _keywords2:+ " "
+				_keywords2:+ w.key
+			Else
+				If _keywords1 Then _keywords1:+ " "
+				_keywords1:+ w.key
+			EndIf
+		Next
+	EndFunction
+	
+	Method compare:Int(o:Object)
+		Local w:TWord = TWord(o)
+		Return w.name.compare(Self.name)
 	EndMethod
 EndType
 
