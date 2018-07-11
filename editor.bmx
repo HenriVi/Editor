@@ -29,6 +29,8 @@ Import wx.wxCheckListBox
 Import wx.wxArtProvider
 
 Import wx.wxScintilla
+Import wx.wxClipboard
+Import wx.wxTextDataObject
 Import wx.wxHtmlWindow
 Import wx.wxFileSystem
 Import wx.wxInternetFSHandler
@@ -46,7 +48,7 @@ Import brl.retro
 'Application info
 '---------------------------------
 Const APP_TITLE:String = "Editor"
-Const APP_VERSION:String = "0.1.1"	' 
+Const APP_VERSION:String = "0.1.2"	' 
 '----------------------------------
 
 
@@ -71,9 +73,7 @@ Const menuID_QUIT:Int = wxID_HIGHEST + 101
 Const menuID_HELP:Int = wxID_HIGHEST + 401
 Const menuID_ABOUT:Int = wxID_HIGHEST + 402
 
-'Const listID_FILTER_WEEK:Int	= wxID_HIGHEST + 20
-
-'Const FLAGS_DEFAULT:Int = 0, FLAGS_OPEN:Int = 1, FLAGS_EDIT:Int = 2
+Const wxEVT_MY_MODIFIED:Int = 1
 
 Global globalUser:String = getenv_("USERNAME").ToUpper().Trim()
 Global globalUserShort:String = globalUser[..3]
@@ -318,9 +318,9 @@ Type TEditor Extends TConsole
 	Global myEdit:TEditor
 	Global e_book:wxFlatNotebook
 	
-	Field keywords_1:String
-	Field keywords_2:String
-	Field keywords:String
+	'Field keywords_1:String
+	'Field keywords_2:String
+	'Field keywords:String
 	
 	Global _sciList:TList = New TList
 	Global _globalID:Int
@@ -406,7 +406,8 @@ Type TEditor Extends TConsole
 						"End Function"
 						EndRem
 		sci.AddText(t)
-		
+		'sci.InsertText(0, t)
+
 		Return sci
 	EndMethod
 	
@@ -419,7 +420,7 @@ Type TEditor Extends TConsole
 		
 		Local keywords_1:String, keywords_2:String
 		
-		keywords_1 = "Const Else End EndExtern EendFunction EndIf EndRem EndType Extern False Field Function "+..
+		keywords_1 = "Const Else End EndExtern EndFunction EndIf EndRem EndType Extern False Field Function "+..
 					"Global If Import Local New Null Print Rem Return SizeOf Then True Type"
 		keywords_2 = "Byte Double Float Int Long Ptr String"
 		
@@ -435,7 +436,7 @@ Type TScintilla Extends wxScintilla
 
 	Global _parent:TEditor
 	Field filename:String
-	Field _charsEntered:Int
+	Field _caretPos:Int = -1
 	
 	Method OnInit()
 		
@@ -524,14 +525,52 @@ Type TScintilla Extends wxScintilla
 	Method ConnectEvents()
 	
 		ConnectAny(wxEVT_KEY_DOWN, OnKeyDown)
-		'ConnectAny(wxEVT_SCI_CHARADDED, OnCharAdded)
+		ConnectAny(wxEVT_SCI_CHARADDED, OnCharAdded)
 		ConnectAny(wxEVT_SCI_MARGINCLICK, OnMarginClick)
-		ConnectAny(wxEVT_SCI_MODIFIED, OnModified)
-		ConnectAny(wxEVT_SCI_STYLENEEDED, OnStyleNeeded)
-		'ConnectAny(wxEVT_SCI_CHANGE, OnChange)
+		'ConnectAny(wxEVT_SCI_MODIFIED, OnModified)
+		'ConnectAny(wxEVT_SCI_STYLENEEDED, OnStyleNeeded)
+		'ConnectAny(wxEVT_MY_MODIFIED, OnApplyChanges)
+		ConnectAny(wxEVT_SCI_UPDATEUI, OnUpdateUI)
 	EndMethod
 	
+	Function OnUpdateUI(ev:wxEvent)
+		
+		Local sci:TScintilla = TScintilla( ev.parent )
+		If Not sci Then DebugLog "No sci!"; Return
+		
+		'DebugLog "OnUpdateUI -> " +sci._caretPos
+		
+		If sci._caretPos = -1 Then Return
+		
+		Local pos:Int = sci.GetCurrentPos()
+		If pos <> sci._caretPos Then
+			
+			DebugLog "UPDATE!"
+			
+			Local startPos:Int = sci.WordStartPosition(sci._caretPos, True)
+			Local endPos:Int = sci.WordEndPosition(sci._caretPos, True)
+			sci._caretPos = -2
+			sci.AutoCapitalize(startPos, endPos)
+		EndIf
+	EndFunction
+	
 	Rem
+	Function OnApplyChanges(ev:wxEvent)
+		
+		DebugLog "OnApplyChanges"
+		
+		Local sci:TScintilla = TScintilla( ev.parent )
+		If Not sci Then DebugLog "No sci!"; Return
+		
+		Local cev:wxCommandEvent = wxCommandEvent( ev )
+		If Not cev Then DebugLog "No wxCommandEvent!"; Return 
+		
+		Local d:TData = TData( cev.GetClientData() )
+		If Not d Then DebugLog "No data!"; Return
+		
+		sci.AutoCapitalize(d.startPos, d.curPos)
+	EndFunction
+	
 	Function OnChange(ev:wxEvent)
 		Local sci:TScintilla = TScintilla( ev.parent )
 		If Not sci Then DebugLog "No sci!"; Return
@@ -566,12 +605,14 @@ Type TScintilla Extends wxScintilla
 			DebugLog "OnChange -> *" + sci.GetTextRange(startPos, curPos) + "*"
 		EndIf
 	EndFunction
+	EndRem
 	
 	Function OnCharAdded(ev:wxEvent)
+		
 		Local sci:TScintilla = TScintilla( ev.parent )
 		If Not sci Then DebugLog "No sci!"; Return
 		
-		'DebugLog sci.GetCurrentLine()
+		'DebugLog "OnCharAdded -> " + sci.GetCurrentPos(); Return
 		
 		Local curPos:Int = sci.GetCurrentPos()
 		Local startPos:Int = sci.WordStartPosition(curPos, True)
@@ -580,12 +621,21 @@ Type TScintilla Extends wxScintilla
 		
 		DebugLog "OnCharAdded -> lenEntered = " + lenEntered + " | start = " + startPos + " | curPos = " + curPos + " | "
 		
-		If lenEntered > 0 Then
+		sci._caretPos = curPos
+		
+		If lenEntered > 1 Then
+			
+			DebugLog "Autocomplite.." + TWord.GetAutoKeywords()
 			
 			If Not sci.AutoCompActive() Then
+				
+				DebugLog "Showing.." + sci.AutoCompShow(lenEntered, TWord.GetAutoKeywords())
 			
-				sci.AutoCompShow(lenEntered, sci._parent.keywords)	
+					
 			EndIf
+		EndIf
+		
+		Rem
 		Else
 			curPos:-1
 			startPos = sci.WordStartPosition(curPos, True)
@@ -595,14 +645,13 @@ Type TScintilla Extends wxScintilla
 			'DebugLog "OnCharAdded -> lenEntered = " + lenEntered + " | start = " + startPos + " | curPos = " + curPos + " | " 
 			DebugLog "OnCharAdded -> *" + sci.GetTextRange(startPos, curPos) + "*"
 		EndIf
+		EndRem
 	EndFunction
-	EndRem
 	
 	Function OnModified(ev:wxEvent)
 		
 		'DebugLog "OnModified"
 		
-		'Return
 		
 		Local sci:TScintilla = TScintilla( ev.parent )
 		If Not sci Then DebugLog "No sci!"; Return
@@ -612,6 +661,7 @@ Type TScintilla Extends wxScintilla
 		
 		Local modType:Int = sev.GetModificationType()
 		
+		Rem
 		If modType & wxSCI_MOD_INSERTTEXT Then
 			
 			'DebugLog "wxSCI_MOD_INSERTTEXT"
@@ -641,22 +691,28 @@ Type TScintilla Extends wxScintilla
 				startPos = sci.WordStartPosition(curPos, True)
 				lenEntered = curPos - startPos
 				If lenEntered < 1 Then Return
-					
+				
+				Local data:TData = New TData
+				data.startPos = startPos
+				data.curPos = curPos
+				sci.SetEvent(data)
+				
 				'DebugLog "OnCharAdded -> lenEntered = " + lenEntered + " | start = " + startPos + " | curPos = " + curPos + " | " 
-				sci.AutoCapitalize(startPos, curPos, True)	'DebugLog "OnModified -> *" + sci.GetTextRange(startPos, curPos) + "*"
+				'sci.AutoCapitalize(startPos, curPos, True)	'DebugLog "OnModified -> *" + sci.GetTextRange(startPos, curPos) + "*"
 			EndIf
 			
 			'DebugLog " = " + sev.GetModificationType() ) + " | " + sev.GetPosition() + " | " + sev.GetLine()
 		EndIf
+		EndRem
 		
-		If modType & wxSCI_MOD_DELETETEXT Then DebugLog "wxSCI_MOD_DELETETEXT"
-		If modType & wxSCI_MOD_DELETETEXT Then DebugLog "wxSCI_MOD_DELETETEXT"
-		'If modType & wxSCI_MOD_CHANGESTYLE Then DebugLog "wxSCI_MOD_CHANGESTYLE"
+		'If modType & wxSCI_MOD_DELETETEXT Then DebugLog "wxSCI_MOD_DELETETEXT"
+		If modType & wxSCI_MOD_CHANGESTYLE Then DebugLog "wxSCI_MOD_CHANGESTYLE"
 		'If modType & wxSCI_MOD_CHANGEFOLD Then DebugLog "wxSCI_MOD_CHANGEFOLD"
 		'If modType & wxSCI_PERFORMED_USER Then DebugLog "wxSCI_PERFORMED_USER"
 		'If modType & wxSCI_PERFORMED_UNDO Then DebugLog "wxSCI_PERFORMED_UNDO"
 		
 	EndFunction
+	
 	
 	Function OnKeyDown(ev:wxEvent)
 
@@ -666,14 +722,42 @@ Type TScintilla Extends wxScintilla
 		If Not sci Then Notify "Scintilla not found!!";Return
 		Local key:String = Chr(keyCode)
 		
-		'DebugLog key + " | " + keyCode
+		DebugLog key + " | " + keyCode
 		
 		Select keyCode
-		
-			Case 9, 13, 32	'Tab, Enter, Space
-				
+	
+		Case 9, 13, 10, 32	'Tab, Enter, Newline, Space
+
+			Local curPos:Int = sci.GetCurrentPos()
+			Local startPos:Int = sci.WordStartPosition(curPos, True)
+			Local lenEntered:Int = curPos - startPos
+			Local txt:String = sci.GetTextRange(startPos, curPos)
 			
+			DebugLog "OnKeyDown -> lenEntered = " + lenEntered + " | start = " + startPos + " | curPos = " + curPos	 + " | text = " + txt
+			
+			If lenEntered > 0 Then
+				
+				'Local data:TData = New TData
+				'data.startPos = startPos
+				'data.curPos = curPos
+				'sci.SetEvent(data)
+				sci.AutoCapitalize(startPos, curPos)
+			EndIf
+				
 		EndSelect
+		
+		If Key = "V" Then
+			If key_ev.ControlDown() Then
+				
+				Local curPos:Int = sci.GetCurrentPos()
+			
+				sci.AutoCapitalize(curPos, curPos, True)
+				
+				'DebugLog sci.GetClipboard()
+				
+				Return
+			EndIf
+		EndIf
 		
 		If key = "F" Then
 			If key_ev.ControlDown() Then
@@ -685,6 +769,7 @@ Type TScintilla Extends wxScintilla
 			EndIf
 		EndIf
 		
+		'DebugLog "OnKeyDown -> Skip"
 		ev.skip()
 	EndFunction
 	
@@ -764,26 +849,62 @@ Type TScintilla Extends wxScintilla
 		EndRem
 	EndFunction
 	
-	Method AutoCapitalize(startPos:Int, endPos:Int, single:Int = True)
+	Method AutoCapitalize(startPos:Int, endPos:Int, isPaste:Int = False)
 		If Not TOptions.opt.autoCap Then Return
 		
-		DebugLog "AutoCapitalize -> start = " + startPos + " |end = " + endPos + " |txt = " + GetTextRange(startPos, endPos)
+		DebugLog "AutoCapitalize -> paste = " + isPaste + " start = " + startPos + " |End = " + endPos + " |txt = " + GetTextRange(startPos, endPos)
 		
-		Local style:Int
+		Local txt:String, curPos:Int
 		
-		If single Then
-			style = GetStyleAt(startPos)
-			If style = wxSCI_B_KEYWORD Or style = wxSCI_B_KEYWORD2 Then
-				'Todo
+		If Not isPaste Then 
+			
+			txt = TWord.GetName( GetTextRange(startPos, endPos) )
+			
+			If TWord.isMatch() Then
+				
+				DebugLog "AutoCapitalize -> isMatch!(" + txt + ")"
+				
+				DeleteRange(startPos, endPos - startPos)	
+				InsertText(startPos, txt)
+				If _caretPos > -2 Then SetSelection(endPos, endPos)
 			EndIf
+			_caretPos = -1
 		Else
-			For Local i:Int = startPos To endPos
-				style = GetStyleAt(startPos)
-				If style = wxSCI_B_KEYWORD Or style = wxSCI_B_KEYWORD2 Then
-					'Todo
-				EndIf
-			Next
+			txt = GetClipboard()
+			If txt Then
+				txt = TWord.Parse(txt)
+				AddText(txt)
+				EnsureCaretVisible()
+				_caretPos = GetCurrentPos()
+			EndIf
 		EndIf
+		
+	EndMethod
+	
+	Method GetClipboard:String()
+		Local clip:wxClipboard = wxClipboard.Get()
+		Local text:String
+		If clip Then
+			If clip.Open()
+				Local data:wxTextDataObject = New wxTextDataObject.Create("")
+				clip.GetData(data)
+				text  = data.GetText()
+				clip.close()
+			EndIf
+		EndIf
+		
+		Return text
+	EndMethod
+	
+	Method SetEvent(data:TData)
+		
+		Local evt:wxCommandEvent = wxCommandEvent.CreateEvent(wxEVT_MY_MODIFIED, wxID_ANY)
+		evt.SetClientData(data)
+		'evt.userData(data)
+		wxWindow(Self).GetEventHandler().AddPendingEvent(evt)
+		
+		'wxWindow(_parent).GetEventHandler().ProcessEvent(evt)
+		'wxWindow(_parent).GetEventHandler().AddPendingEvent(evt)
 		
 	EndMethod
 	
@@ -879,6 +1000,7 @@ Type TWord
 	Field name:String
 	Field key:String
 	
+	Global _found:Int
 	Global _wordList:TList = New TList
 	
 	Function LoadKeywords:Int(words:String, style:Int = wxSCI_B_KEYWORD)
@@ -905,6 +1027,10 @@ Type TWord
 		Return True
 	EndFunction
 	
+	Function GetAutoKeywords:String()
+		Return _autoKeywords
+	EndFunction
+		
 	Function GetKeywords:String(style:Int = wxSCI_B_KEYWORD)
 		If style = wxSCI_B_KEYWORD2 Then
 			Return _keywords2
@@ -913,8 +1039,143 @@ Type TWord
 		EndIf
 	EndFunction
 	
-	Function GetAutoKeywords:String()
-		Return _autoKeywords
+	Function GetName:String(key:String)
+		If Not key Then Return key
+		
+		Local tmpKey:String = key.tolower()
+		
+		For Local w:TWord = EachIn _wordList
+			If w.key = tmpKey Then _found = True; Return w.name
+		Next
+		
+		_found = False
+		Return key
+	EndFunction
+	
+	Function isMatch:Int()
+		Return _found
+	EndFunction
+	
+	Function Parse:String(txt:String = "")
+		
+		If Not txt Then Return txt
+		
+		Local startPos:Int, isString:Int, isCom:Int, isRem:Int, isFirst:Int = 1, isNewline:Int
+		Local isFunction:Int, isMethod:Int, isType:Int
+		Local token:String, name:String, char:Int, analyze:Int, txt_ptr:Short Ptr = txt.ToWString()
+		Local eol:Int = txt.length	' - 1
+		
+		DebugLog "Parsing.."
+		
+		For Local i:Int = 0 Until txt.length
+			
+			If i = eol And startPos > -1 Then analyze = 1
+			
+			Select txt[i]
+				
+				Case 39 'Comment
+					
+					If isString Or isRem Then Continue
+					
+					analyze = 1
+					isCom = 1
+					'Continue
+					
+				Case 34	'String
+					
+					If isCom Or isRem Then Continue
+					isString = Not isString
+					
+					If isString Then analyze = 1
+					startPos = -1
+					'Continue
+				
+				Case 9, 32, 59, 10, 13	'Tab, Space, Semicolon, Newline, Enter
+					
+					If txt[i] = 10 Or txt[i] = 13 Then isNewline = 1	'Newline / Enter
+					If isString Or isCom Then
+						If isNewline Then
+							startPos = -1
+							isString = 0
+							isCom = 0
+							isFirst = 1
+							isNewline = 0
+						EndIf
+						
+						Continue
+					ElseIf startPos = -1 
+						Continue
+					EndIf
+					
+					analyze = 1
+					
+				Default
+					
+					If isString Or isCom Then Continue
+					If startPos = -1 Then startPos = i
+					
+			EndSelect
+			
+			'Words are analyzed at this point
+			'--------------------------------
+			If analyze Then
+				
+				DebugLog "Analyzing.."
+				
+				token = txt[startPos..i].tolower()
+				name = GetName(token)
+				If isMatch() And name <> token And TOptions.opt.autoCap Then
+					For char = 0 Until token.length
+						txt_ptr[startPos + char] = name[char]
+					Next
+				EndIf
+				
+				Print token
+				
+				If isFirst Then	
+					If token = "function" Then
+						isFunction = 1
+					ElseIf token = "method"
+						isMethod = 1
+					ElseIf	token = "rem"
+						isrem = 1
+					ElseIf token = "end"
+						If token = "endfunction" Or token = "end function" Then
+							'Todo
+						ElseIf token = "endmethod" Or token = "end method"
+							'Todo
+						ElseIf token = "endrem" Or token = "end rem"
+							isRem = 0
+						EndIf
+					EndIf
+					
+					isFirst = 0
+				Else
+					If isRem Then analyze = 0; Continue
+					
+					If isFunction Then
+						isFunction = 0
+						
+					ElseIf isMethod
+						isMethod = 0
+					EndIf
+				EndIf
+					
+				If isNewline Then
+					startPos = -1
+					isString = 0
+					isCom = 0
+					isFirst = 1
+					isNewline = 0
+					
+				EndIf
+					
+				startPos = -1
+				analyze = 0
+			EndIf
+		Next
+		
+		Return txt.FromWString(txt_ptr)
 	EndFunction
 	
 	Function SetKeywords()
@@ -972,6 +1233,12 @@ Type TStyle
 		
 		Return s
 	EndFunction
+EndType
+
+Type TData
+	Field startPos:Int
+	Field curPos:Int
+	Field length:Int
 EndType
 
 Function EntryDlg:String(text:String, title:String)
