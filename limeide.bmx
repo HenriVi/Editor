@@ -49,8 +49,8 @@ Import brl.retro
 '---------------------------------
 'Application info
 '---------------------------------
-Const APP_TITLE:String = "Editor"
-Const APP_VERSION:String = "0.3.0"	' 
+Const APP_TITLE:String = "LimeIDE"
+Const APP_VERSION:String = "0.3.1"	' 
 '----------------------------------
 
 
@@ -87,7 +87,7 @@ Const MODIFIED_ADD:Int = 4
 Const MODIFIED_DELETE:Int = 5
 Const MODIFIED_SELECT:Int = 6
 Const MODIFIED_SELECT_LINE:Int = 7
-Const MODIFIED_TREE_ADD:Int = 8
+Const MODIFIED_TREE_ADD_TRACEABLE:Int = 8
 Const MODIFIED_TREE_UPDATE:Int = 9
 Const MODIFIED_TREE_DELETE:Int = 10
 
@@ -340,8 +340,8 @@ Type TConsole Extends TWindow
 		TExplorer.Create()
 		
 		'Testing code
-		myEditor.NewEditor()
-		'myEditor.TestEditor()
+		'myEditor.NewEditor()
+		myEditor.TestEditor()
 		
 		conPanel.SetSizer(conSizer)
 		conPanel.Layout()
@@ -426,47 +426,6 @@ Type TEditor Extends TConsole
 		
 	EndFunction
 	
-	Method TestEditor()
-		
-		Local t:String = ""+..
-			"'TEST~n"+..
-			"~qHello world~q Hello Double Int 123~n~n"+..
-			"Extern~n"+..
-			"~tFunction D(a:int, b:int, c:int)~n"+..
-			"EndExtern~n~n"+..
-			"Rem~n"+..
-			"commented~n"+..
-			"Endrem~n~n"+..
-			"Function Test1()~n"+..
-			"~tPrint ~qHello world1~q~n~n"+..
-			"~tFunction Test_sub1()~n"+..
-			"~t~tPrint ~qHello sub1~q~n"+..
-			"~tEndFunction~n~n"+..
-			"EndFunction~n~n"+..
-			"~nConst MY_CONSTANT:Int = 123~n~n"+ ..
-			"Function Test2()~n"+..
-			"~tPrint ~qHello world2~q~n"+..
-			"End Function~n~n"+..
-			"Type TestType~n~n"+..
-			"~tField x:Int = 1~n"+..
-			"~tField y:Int = 2~n"+..
-			"~tField z:Int = 3~n~n"+..
-			"~tGlobal list:TList = New Tlist~n~n"+..
-			"~tMethod Draw()~n~n"+..
-			"~t~t'Todo~n"+..
-			"~tEndMethod~n"+..
-			"EndType~n"+..
-			""+..
-			""+..
-			""
-
-		'sci.EmptyUndoBuffer()
-		
-		Local sci:TScintilla = GetCurrentEdit()
-		sci.file.text = t
-		sci.AnalyzeFile()
-	EndMethod
-	
 	Method CloseCurrentEdit()
 		
 		Local index:Int = e_book.GetSelection()
@@ -513,11 +472,11 @@ Type TEditor Extends TConsole
 		
 		Local keywords_1:String, keywords_2:String, traceWords:String
 		
-		keywords_1 = "Abs Abstract Alias And Asc Assert Case Catch Chr Const Continue Default DefData Delete EachIn " +..
+		keywords_1 = "Abs Abstract Alias And Asc Assert Case Catch Chr Const Continue DebugLog DebugStop Default DefData Delete EachIn " +..
 					"Else ElseIf End EndExtern EndFunction EndIf EndMethod EndRem EndSelect EndTry EndType Exit Extends Extern " +..
 					"False Field Final For Forever Framework Function Global Goto If Import Incbin IncbinLen IncbinPtr Include " +..
 					"Len Local Max Method Min Mod Module ModuleInfo New Next Not Null Object Or Pi Print Private Public ReadData " +..
-					"Release Rem Repeat RestoreData Return Sar Select Self Sgn Shl Shr SizeOf Step Strict Super Then Throw " +..
+					"Release Rem Repeat RestoreData Return Sar Select Self Sgn Shl Shr SizeOf Step Strict Super SuperStrict Then Throw " +..
 					"To True Try Type Until Var VarPtr Wend While"
 					
 		keywords_2 = "Byte Double Float Int Long Ptr Short String"
@@ -593,6 +552,59 @@ Type TEditor Extends TConsole
 	Function SetPosition(curPos:Int, prevPos:Int, line:Int, sel_start:Int, sel_end:Int)
 		myWin.w_statusbar.SetStatusText("curPos = "+curPos+" | previousPos = "+prevPos+" | line = "+line+" | sel_start = "+sel_start+" | sel_end = "+sel_end+" | autoCompActive = "+myEditor.GetCurrentEdit().AutoCompActive())
 	EndFunction
+	
+	Method TestEditor:Int()
+		
+		Local t:String = ""+..
+			"'TEST~n"+..
+			"~qHello world~q Hello Double Int 123~n~n"+..
+			"Extern~n"+..
+			"~tFunction D(a:int, b:int, c:int)~n"+..
+			"EndExtern~n~n"+..
+			"Rem~n"+..
+			"commented~n"+..
+			"Endrem~n~n"+..
+			"Function Test1()~n"+..
+			"~tPrint ~qHello world1~q~n~n"+..
+			"~tFunction Test_sub1()~n"+..
+			"~t~tPrint ~qHello sub1~q~n"+..
+			"~tEndFunction~n~n"+..
+			"EndFunction~n~n"+..
+			"~nConst MY_CONSTANT:Int = 123~n~n"+ ..
+			"Function Test2()~n"+..
+			"~tPrint ~qHello world2~q~n"+..
+			"End Function~n~n"+..
+			"Type TestType~n~n"+..
+			"~tField x:Int = 1~n"+..
+			"~tField y:Int = 2~n"+..
+			"~tField z:Int = 3~n~n"+..
+			"~tGlobal list:TList = New Tlist~n~n"+..
+			"~tMethod Draw()~n~n"+..
+			"~t~t'Todo~n"+..
+			"~tEndMethod~n"+..
+			"EndType~n"+..
+			""+..
+			""+..
+			""
+
+		'sci.EmptyUndoBuffer()
+		Local sci:TScintilla = TScintilla( New TScintilla.Create( e_book, wxID_ANY,,,,, 0) )
+		If Not sci Then Notify "Error: Could not create scintilla"; Return False
+		
+		Local name:String
+		
+		name = "untitled" + GetNewID() + ".bmx"
+		sci.file = TFile.Create(name)
+		sci._tree = myExplorer.NewTree(name)
+		sci.file.text = t
+		
+		_sciList.AddLast(sci)
+		e_book.AddPage(sci , name, True)
+		
+		sci.AnalyzeFile()
+		
+		Return True
+	EndMethod
 	
 EndType
 
@@ -941,6 +953,7 @@ Type TScintilla Extends wxScintilla
 	
 	
 	Function OnChange(ev:wxEvent)
+	
 		Local sci:TScintilla = TScintilla( ev.parent )
 		If Not sci Then DebugLog "No sci!"; Return
 		
@@ -974,7 +987,7 @@ Type TScintilla Extends wxScintilla
 
 		sci.SetPreviousPos( curPos )
 		
-		DebugLog "OnCharAdded -> isLetter = " + isLetter + " | start = " + startPos + " | curPos = " + curPos + " | charEntered = " + charEntered + " | prevPos = " + sci.GetPreviousPos() + " | AutoCompActive = " + sci.AutoCompActive()
+		'DebugLog "OnCharAdded -> isLetter = " + isLetter + " | start = " + startPos + " | curPos = " + curPos + " | charEntered = " + charEntered + " | prevPos = " + sci.GetPreviousPos() + " | AutoCompActive = " + sci.AutoCompActive()
 		
 		If lenEntered > 1 Then
 			If Not isNextLetter
@@ -1254,6 +1267,8 @@ Type TScintilla Extends wxScintilla
 		
 		For Local m:TModified = EachIn _evtQueue
 			
+			'DebugLog "TScintilla: m.id = " + m.id
+			
 			Select m.id
 			
 			Case MODIFIED_STATUSBAR			
@@ -1280,7 +1295,7 @@ Type TScintilla Extends wxScintilla
 				Local start:Int = sci.LineFromPosition( sci.GetCurrentPos() ) - 2
 				Local stop:Int = start + m.line
 				
-				DebugLog "OnMyModified -> ADD | start = " + start + " | stop = " + stop
+				DebugLog "SCI_OnMyModified -> ADD | start = " + start + " | stop = " + stop
 				
 				sci.SetFoldLevels(start, stop)
 				
@@ -1289,13 +1304,13 @@ Type TScintilla Extends wxScintilla
 				Local start:Int = sci.GetCurrentLine()
 				Local stop:Int = start
 				
-				DebugLog "OnMyModified -> DELETE | start = " + start + " | stop = " + stop
+				DebugLog "SCI_OnMyModified -> DELETE = " + MODIFIED_TREE_UPDATE + " | start = " + start + " | stop = " + stop
 				
 				sci.SetFoldLevels(start, stop)
 				
 				' Update tree
-				Local m:TModified = TModified.CreateLine(MODIFIED_TREE_UPDATE, start, m.line)	'Single press means count = 1
-				TExplorer.SetEvent(m)
+				Local mTree:TModified = TModified.CreateLine(MODIFIED_TREE_UPDATE, start, -m.line)	'Single press means count = 1
+				TExplorer.SetEvent(mTree)
 				
 			'Case MODIFIED_SELECT
 				
@@ -1307,16 +1322,17 @@ Type TScintilla Extends wxScintilla
 				Local start:Int = sci.GetLineIndentPosition(line)
 				Local stop:Int = sci.GetLineEndPosition(line)
 				
-				DebugLog "OnMyModified -> SELECT | start = " + start + " | stop = " + stop
+				DebugLog "SCI_OnMyModified -> SELECT | start = " + start + " | stop = " + stop
 				
 				sci.GotoLine(line)
 				sci.SetSelection(start, stop)
 				sci.SetFocus()
 			Default
-				DebugLog "OnMyModified -> ID not found!"
+				DebugLog "SCI_OnMyModified -> ID not found!"
 			EndSelect
 		Next
 		
+		'DebugLog "TScintilla: Clear modified"
 		_evtQueue.Clear()
 	EndFunction
 	
@@ -1742,7 +1758,7 @@ Type TScintilla Extends wxScintilla
 		Return True
 	EndFunction
 	
-	Function Parse:String(txt:String = "", start:Int = 0)
+	Method Parse:String(txt:String = "", start:Int = 0)
 		
 		If Not txt Then Return txt
 		
@@ -1888,9 +1904,11 @@ Type TScintilla Extends wxScintilla
 		Next
 		
 		Return txt.FromWString(txt_ptr)
-	EndFunction
+	EndMethod
 	
-	Function ParseTraceable(token:String, line:Int = -1)	', isParent:Int = False)
+	Method ParseTraceable(token:String, line:Int = -1)	', isParent:Int = False)
+		
+		DebugLog "ParseTraceable"
 		
 		Local traceType:String = _traceType
 		
@@ -1913,17 +1931,18 @@ Type TScintilla Extends wxScintilla
 			Local ar:String[] = token.split(":")		
 		EndIf
 		
-		'DebugLog token + " | line = " + line + " | key = " + key
+		DebugLog token + " | line = " + line + " | key = " + key + " | level = " + GetFoldLevel(line) + " | parent level = " + GetFoldParent(line)
 		
 		Local w:TWord = New TWord
 		w.name = token
 		w.key = key
 		w.line = line
+		w.parentLine = GetFoldParent(line)
 		
-		Local m:TModified = TModified.CreateWord(MODIFIED_TREE_ADD, w)
+		Local m:TModified = TModified.CreateWord(MODIFIED_TREE_ADD_TRACEABLE, w)
 		TExplorer.SetEvent(m)
 		
-	EndFunction
+	EndMethod
 	
 	Method Paste()
 		
@@ -1957,6 +1976,8 @@ Type TScintilla Extends wxScintilla
 	EndMethod
 	
 	Method SetEvent(id:Int, line:Int = 0)
+		
+		'DebugLog "TScintilla: SetEvent -> Id = " + id + " | line = " + line
 		
 		Local m:TModified = New TModified
 		m.id = id
@@ -2171,32 +2192,74 @@ Type TTreeCtrl Extends wxTreeCtrl
 
 		For Local m:TModified = EachIn _evtQueue
 			
+			'DebugLog "TTreeCtrl: m.id = " + m.id
+			
 			Select m.id
 			
-			Case MODIFIED_TREE_ADD			
+			Case MODIFIED_TREE_ADD_TRACEABLE		
 				
-				DebugLog "TTreeCtrl -> OnMyModified -> MODIFIED_TREE_ADD -> " + tree._tag
+				DebugLog "TREE_OnMyModified -> MODIFIED_TREE_ADD_TRACEABLE -> " + tree._tag
 					
-				tree.AddTraceable(m.word)
+				'tree.AddTraceable(m.word)
+				tree.AddItem(m.word)
 			
 			Case MODIFIED_TREE_DELETE		
 				
-				DebugLog "TTreeCtrl -> OnMyModified -> MODIFIED_TREE_DELETE -> line = " + m.line
+				DebugLog "TREE_OnMyModified -> MODIFIED_TREE_DELETE -> line = " + m.line
 			
 			Case MODIFIED_TREE_UPDATE		
 				
-				DebugLog "TTreeCtrl -> OnMyModified -> MODIFIED_TREE_UPDATE -> line = " + m.line
+				DebugLog "TREE_OnMyModified -> MODIFIED_TREE_UPDATE -> line = " + m.line + " | count = " + m.count
 				
-				tree.UpdateTree(m.line)
+				tree.UpdateTree(m.line, m.count)
 			
 			Default
-				DebugLog "OnMyModified -> ID not found!"
+				DebugLog "TREE_OnMyModified -> ID not found!"
 			EndSelect
 		Next
 		
+		'DebugLog "TTreeCtrl: Clear modified"
 		_evtQueue.Clear()
 	EndFunction
 	
+	Method AddItem(word:TWord)
+		
+		If Not word Then Return
+		If Not _root Then _root = AddRoot("Root")
+		If Not word.parentId Then word.parentId = _root
+		
+		Local tmpId:wxTreeItemId, tmpLine:Int
+		
+		For Local tw:TWord = EachIn _traceList
+			
+			'Line already found. Update info
+			If tw.line = word.line Then
+				tw.name = word.name
+				SetItemText(word.treeId, word.name)
+				
+			'Parent line found
+			ElseIf tw.line = word.parentLine
+				word.parentLine = tw.line
+				word.parentId = tw.treeId
+			
+			'Find correct tree location
+			ElseIf tw.line < word.line And tw.line > tmpLine Then
+				tmpLine = tw.line
+				tmpId = tw.treeId
+				
+			EndIf
+		Next
+		
+		If tmpId Then
+			word.treeId = InsertItem(word.parentId, tmpId, word.name,,, word)
+		Else
+			word.treeId = AppendItem(word.parentId, word.name,,, word)
+		EndIf
+		
+		_traceList.addlast(word)
+	EndMethod
+	
+	Rem
 	Method AddItem:wxTreeItemId(item:String, parent:wxTreeItemId=Null, extra:Object=Null)
 		
 		If Not _root Then _root = AddRoot("Root")
@@ -2220,8 +2283,9 @@ Type TTreeCtrl Extends wxTreeCtrl
 		Next
 		
 		_traceList.addlast(w)
-		AddItem(w.name,, w)
+		w.treeId = AddItem(w.name,, w)
 	EndMethod
+	EndRem
 	
 	Method GetTreeviewItem:String(index:Int, col:Int)
 	EndMethod
@@ -2234,11 +2298,20 @@ Type TTreeCtrl Extends wxTreeCtrl
 		Return GetSelections()
 	EndMethod
 	
+	Method RemoveItem(word:TWord)
+		If Not word Or Not word.treeId Then Return
+		
+		DeleteItem(word.treeId)
+		_traceList.remove(word)
+	EndMethod
+	
 	Method SetEvent(m:TModified)	'id:Int, lines:Int = 0)
 		
-		If Not m Then Return
+		If Not m Then DebugLog "TTreeCtrl: SetEvent -> No Data!"; Return
 		_evtQueue.AddLast(m)
 		
+		'DebugLog "TTreeCtrl: SetEvent -> Id = " + m.id + " | line = " + m.line
+				
 		Local evt:wxCommandEvent = wxCommandEvent.CreateEvent(wxEVT_MY_MODIFIED, wxID_ANY)
 		wxWindow(Self).GetEventHandler().AddPendingEvent(evt)
 		
@@ -2255,11 +2328,37 @@ Type TTreeCtrl Extends wxTreeCtrl
 	
 	Method UpdateTree(line:Int, count:Int = 1)
 		
-		For Local w:TWord = EachIn _traceList
-			If w.line => line Then
-				w.line:+ count
-			EndIf
-		Next
+		DebugLog "UpdateTree: line = " + line + " | count = " + count
+		
+		If count < 0 Then DebugStop
+		
+		Local w:TWord
+		If count > 0 Then
+			For w = EachIn _traceList
+				If w.line => line Then
+					w.line:+ count
+				EndIf
+			Next
+		Else
+			Local stop:Int = line + Abs(count)
+			Local list:TList = New TList
+			
+			For w = EachIn _traceList
+				If w.line => line And w.line <= stop Then
+					list.addlast(w)
+				ElseIf w.line > stop
+					w.line:+ count
+				EndIf
+			Next
+			
+			For w = EachIn list
+			
+				DebugLog "Removing tree item '" + w.name + "'" 
+				
+				RemoveItem(w)
+			Next
+		EndIf
+		
 	EndMethod
 EndType
 
@@ -2359,6 +2458,10 @@ EndRem
 
 Type TWord
 	
+	Field parentId:wxTreeItemId	', childId:wxTreeItemId
+	Field parentLine:Int
+	Field treeId:wxTreeItemId
+	
 	Field style:Int
 	Field name:String
 	Field key:String
@@ -2369,6 +2472,12 @@ Type TWord
 	Method compare:Int(o:Object)
 		Local w:TWord = TWord(o)
 		Return w.name.compare(Self.name)
+	EndMethod
+	
+	Method Copy(word:TWord)
+		If Not word Then Return
+		
+		
 	EndMethod
 EndType
 
@@ -2402,7 +2511,8 @@ Type TStyle
 EndType
 
 Type TModified
-
+	
+	'Field target:Int	'Where event was meant
 	Field id:Int
 	Field line:Int
 	Field count:Int
