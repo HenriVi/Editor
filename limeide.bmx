@@ -1652,7 +1652,7 @@ Type TScintilla Extends wxScintilla
 				Local data:wxTextDataObject = New wxTextDataObject.Create("")
 				clip.GetData(data)
 				text  = data.GetText()
-				clip.close()
+				clip.Close()
 			EndIf
 		EndIf
 		
