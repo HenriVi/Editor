@@ -3,7 +3,7 @@ Rem
 ---------------------
 Blitzmax code parser
 ---------------------
-- Version 0.2
+- Version 0.3
 
 EndRem
 
@@ -12,8 +12,8 @@ EndRem
 '--------
 Local c:TBMaxCode = New TBMaxCode
 c.SetKeywords()
-
-Print c.Parse("function hello()~n~tpRINt ~qHello world!~q~nENDFUNCTION~n~nenum myEnum~n~ta~n~tb~n~tc~nend enum")
+c.SetOptions("stdout")
+c.Parse("function hello()~n~tpRINt ~qHello world!~q~nENDFUNCTION~n~nenum myEnum~n~ta~n~tb~n~tc~nend enum")
 
 End
 
@@ -28,8 +28,12 @@ Type TBMaxCode
 	Global _traceType:String
 	Global _wordList:TList = New TList
 
-	Global _isMatch:Int, _isTraceable:Int
+	Field _isMatch:Int, _isTraceable:Int
 	
+	Field optAutoCap:Int = True
+	Field optStdOut:Int
+	
+	Global mPrint:TMutex = TMutex.Create()
 	
 	Function GetAutoKeywords:String()
 		Return _autoKeywords
@@ -43,7 +47,7 @@ Type TBMaxCode
 		EndIf
 	EndFunction
 	
-	Function GetWord:String(key:String)
+	Method GetWord:String(key:String)
 		If Not key Then Return key
 		
 		Local tmpKey:String = key.tolower()
@@ -65,8 +69,9 @@ Type TBMaxCode
 		
 		_isMatch = False
 		_isTraceable = False
+		
 		Return key
-	EndFunction
+	EndMethod
 	
 	Function InitKeywords()
 	
@@ -94,13 +99,13 @@ Type TBMaxCode
 		Next
 	EndFunction
 	
-	Function isMatch:Int()
+	Method isMatch:Int()
 		Return _isMatch
-	EndFunction
+	EndMethod
 	
-	Function isTraceable:Int()
+	Method isTraceable:Int()
 		Return _isTraceable
-	EndFunction
+	EndMethod
 	
 	Function LoadKeywords:Int(words:String, style:Int = STYLE_KEYWORDS_1)
 		
@@ -126,16 +131,22 @@ Type TBMaxCode
 		Return True
 	EndFunction
 	
-	Function Parse:String(txt:String = "", start:Int = 0)
+	Method Parse:String(txt:String)
+		
+		If Not txt Then Return txt
+		
+		Return _parse(txt)
+		
+	EndMethod
+	
+	Method _parse:String(txt:String Var, start:Int = 0)
 			
 		If Not txt Then Return txt
 		
-		'DebugLog "Parse -> " + start + " | length = " + txt.length 
-		
 		Local startPos:Int = -1, lineCount:Int = start
-		Local isString:Int, isCom:Int, isRem:Int, isNewline:Int, isEnd:Int	', isFirst:Int = 1
+		Local isString:Int, isCom:Int, isRem:Int, isNewline:Int, isEnd:Int
 		Local isParam:Int
-		Local isIdentifier:Int	'isFunction:Int, isMethod:Int, isType:Int
+		Local isIdentifier:Int
 		Local token:String, name:String, char:Int, analyze:Int, txt_ptr:Short Ptr = txt.ToWString()
 		Local eol:Int = txt.length - 1
 		
@@ -210,7 +221,7 @@ Type TBMaxCode
 					
 					name = GetWord(token)
 					If isMatch() Then
-						If TOptions.opt.autoCap And name <> token Then
+						If optAutoCap And name <> token Then
 							For char = 0 Until token.length
 								txt_ptr[startPos + char] = name[char]
 							Next
@@ -242,10 +253,20 @@ Type TBMaxCode
 			EndIf
 		Next
 		
-		Return txt.FromWString(txt_ptr)
-	EndFunction
+		If optStdOut Then
+			
+			mPrint.Lock()
+			Print txt.FromWString(txt_ptr)
+			mPrint.UnLock()
+			
+			Return ""
+		Else	
+			Return txt.FromWString(txt_ptr)
+		EndIf
+		
+	EndMethod
 
-	Function ParseTraceable(token:String, line:Int = -1)
+	Method ParseTraceable(token:String, line:Int = -1)
 		
 		'DebugLog "ParseTraceable"
 		
@@ -280,7 +301,7 @@ Type TBMaxCode
 		
 		'Local m:TModified = TModified.CreateWord(MODIFIED_TREE_ADD_TRACEABLE, w)
 		'TExplorer.SetEvent(m)
-	EndFunction
+	EndMethod
 	
 	Method SetKeywords()
 		
@@ -304,7 +325,16 @@ Type TBMaxCode
 		
 	EndMethod
 	
-	Function SetTraceWords:Int(words:String)
+	Method SetOptions(options:String = "")
+		
+		options = options.Trim().toUpper()
+		
+		If options.contains("STDOUT") Then optStdOut = True
+		
+		
+	EndMethod
+	
+	Method SetTraceWords:Int(words:String)
 		If Not words Then Return False
 		
 		Local ar:String[] = words.split(" ")
@@ -323,7 +353,7 @@ Type TBMaxCode
 		Next
 		
 		Return True
-	EndFunction
+	EndMethod
 	
 EndType
 
@@ -343,13 +373,3 @@ Type TWord
 	
 EndType
 
-Type TOptions
-	Global opt:TOptions = New TOptions
-	
-	Field autoCap:Int = True
-	Field folding:Int = True
-	
-	Method LoadOptions()
-		
-	EndMethod
-EndType
