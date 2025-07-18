@@ -65,11 +65,15 @@ Incbin "graphics\new.png"
 Incbin "graphics\open.png"
 Incbin "graphics\close.png"
 Incbin "graphics\save.png"
+Incbin "graphics\build.png"
+Incbin "graphics\buildAndRun.png"
 
 Const userID_NEW:Int = wxID_HIGHEST + 1
 Const userID_OPEN:Int = wxID_HIGHEST + 2
 Const userID_CLOSE:Int = wxID_HIGHEST + 3
 Const userID_SAVE:Int = wxID_HIGHEST + 4
+Const userID_BUILD:Int = wxID_HIGHEST + 5
+Const userID_BUILD_AND_RUN:Int = wxID_HIGHEST + 6
 
 Const menuID_QUIT:Int = wxID_HIGHEST + 101
 Const menuID_HELP:Int = wxID_HIGHEST + 401
@@ -83,13 +87,27 @@ Const KEY_DEL:Int = 127
 Const wxEVT_MY_MODIFIED:Int = 1
 Const MODIFIED_STATUSBAR:Int = 2
 Const MODIFIED_FOLDLEVELS:Int = 3
-Const MODIFIED_ADD:Int = 4
-Const MODIFIED_DELETE:Int = 5
+Const MODIFIED_LINES_ADD:Int = 4
+Const MODIFIED_LINES_DEL:Int = 5
 Const MODIFIED_SELECT:Int = 6
 Const MODIFIED_SELECT_LINE:Int = 7
 Const MODIFIED_TREE_ADD:Int = 8
 Const MODIFIED_TREE_UPDATE:Int = 9
 Const MODIFIED_TREE_DELETE:Int = 10
+Const MODIFIED_REM_ADD:Int = 11
+Const MODIFIED_REM_DEL:Int = 12
+
+'Const CODE_STATUS_DEFAULT:Int = 0
+'Const CODE_STATUS_IDENTIFIER:Int = 1
+
+Const CODE_STATUS_DEFAULT:Int = 1
+Const CODE_STATUS_REM:Int = 2
+Const CODE_STATUS_STRING:Int = 3
+Const CODE_STATUS_IDENTIFIER:Int = 4
+Const CODE_STATUS_COM:Int = 5
+
+Const BUILD_DEBUG:Int = 1
+Const BUILD_RELEASE:Int = 2
 
 Global globalUser:String = getenv_("USERNAME").ToUpper().Trim()
 Global globalUserShort:String = globalUser[..3]
@@ -235,6 +253,8 @@ Type TWindow Extends TApp
 		w_toolbar.AddTool(userID_OPEN, _("Open"), ArtProvider.getBitmap(userID_OPEN), wxNullBitmap, wxITEM_NORMAL, "Open file", "")
 		w_toolbar.AddTool(userID_CLOSE, _("Close"), ArtProvider.getBitmap(userID_CLOSE), wxNullBitmap, wxITEM_NORMAL, "Close file", "")
 		w_toolbar.AddTool(userID_SAVE, _("Save"), ArtProvider.getBitmap(userID_SAVE), wxNullBitmap, wxITEM_NORMAL, "Save file", "")
+		w_toolbar.AddTool(userID_BUILD, _("Build"), ArtProvider.getBitmap(userID_BUILD), wxNullBitmap, wxITEM_NORMAL, "Build", "")
+		w_toolbar.AddTool(userID_BUILD_AND_RUN, _("Build & Run"), ArtProvider.getBitmap(userID_BUILD_AND_RUN), wxNullBitmap, wxITEM_NORMAL, "Build & Run", "")
 			
 		w_toolbar.Realize()
 		
@@ -310,6 +330,14 @@ Type TWindow Extends TApp
 		'	Print i + " | level = " + sci.GetFoldLevel(i) + " | " + sci.Getline(i).Trim() + " | " + sci.GetFoldParent(i)
 		'Next
 		
+	EndFunction
+	
+	Function OnToolBuild(ev:wxEvent)
+		myEditor.BuildEdit(False)
+	EndFunction
+	
+	Function OnToolBuildAndRun(ev:wxEvent)
+		myEditor.BuildEdit(True)
 	EndFunction
 	
 EndType
@@ -467,6 +495,16 @@ Type TEditor Extends TConsole
 		sci.AnalyzeFile()
 	EndMethod
 	
+	Method BuildEdit(run:Int)
+		
+		Local sci:TScintilla = GetCurrentEdit()
+		If Not sci Then Notify "Error: No editor to run."; Return
+		
+		sci.file.save()
+		sci.file.build(run)
+		
+	EndMethod
+	
 	Method CloseCurrentEdit()
 		
 		Local index:Int = e_book.GetSelection()
@@ -511,22 +549,26 @@ Type TEditor Extends TConsole
 	
 	Method LoadKeywords()
 		
-		Local keywords_1:String, keywords_2:String, traceWords:String
+		Local keywords_1:String, keywords_2:String, traceWords:String, headerWords:String
 		
 		keywords_1 = "Abs Abstract Alias And Asc Assert Case Catch Chr Const Continue Default DefData Delete EachIn " +..
-					"Else ElseIf End EndExtern EndFunction EndIf EndMethod EndRem EndSelect EndTry EndType Exit Extends Extern " +..
-					"False Field Final For Forever Framework Function Global Goto If Import Incbin IncbinLen IncbinPtr Include " +..
-					"Len Local Max Method Min Mod Module ModuleInfo New Next Not Null Object Or Pi Print Private Public ReadData " +..
-					"Release Rem Repeat RestoreData Return Sar Select Self Sgn Shl Shr SizeOf Step Strict Super Then Throw " +..
-					"To True Try Type Until Var VarPtr Wend While"
+					"Else ElseIf End EndExtern EndFunction EndIf EndMethod EndRem EndSelect EndTry EndType Enum Exit " +..
+					"Extends Extern False Field Final For Forever Framework Function Global Goto If Import Incbin " +..
+					"IncbinLen IncbinPtr Include Len Local Max Method Min Mod Module ModuleInfo New Next Not Null " +..
+					"Object Or Pi Print Private Public ReadData Release Rem Repeat RestoreData Return Sar Select " +..
+					" Self Sgn Shl Shr SizeOf Step Strict Struct Super Then Throw To True Try Type Until Var VarPtr " +..
+					"Wend While"
 					
 		keywords_2 = "Byte Double Float Int Long Ptr Short String"
 		
-		traceWords = "Function Type Method"
+		traceWords = "Function Type Method Rem Local Global Struct"
+		
+		headerWords = "Type Struct"
 		
 		TScintilla.LoadKeywords(keywords_1, wxSCI_B_KEYWORD)
 		TScintilla.LoadKeywords(keywords_2, wxSCI_B_KEYWORD2)
 		TScintilla.SetTraceWords(traceWords)
+		TScintilla.SetHeaderWords(headerWords)
 		TScintilla.InitKeywords()
 		
 	EndMethod
@@ -790,7 +832,10 @@ Type TScintilla Extends wxScintilla
 	'Search text
 	Field _searchText:String
 	
-	'Misc
+	'Code stage
+	Field _codeStatus:Int
+	
+	'Auto complete
 	Field _autoCompActive:Int
 	
 	Field sciMenu:wxMenu
@@ -864,6 +909,8 @@ Type TScintilla Extends wxScintilla
 		'Set default lexer
 		'------------------
 		SetLexerStyle(wxSCI_LEX_BLITZMAX)	'	wxSCI_LEX_CONTAINER)	'
+		SetWordChars("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMONPQRSTUVWXYZ._")
+		
 		'SetProperty("fold", True)	'Use custom folding
 		'SetProperty("fold.compact", False)
 		'SetProperty("fold.basic.syntax.based", True)
@@ -964,6 +1011,15 @@ Type TScintilla Extends wxScintilla
 		If Not sci Then DebugLog "No sci!"; Return
 		
 		Local curPos:Int = sci.GetCurrentPos()
+		Local line:Int = sci.LineFromPosition(curPos)
+		Local style:Int = sci.GetStyleAt(curPos - 2)
+		
+		'DebugLog "OnCharAdded: Line 0 = " + sci.GetLineState(0) + " | Line 1 = " + sci.GetLineState(1) + " | Line 2 = " + sci.GetLineState(2)
+		
+		sci.GetLineCodeStatus(line)
+		
+		'Print "OnCharAdded: Style = " + style + " | last styled pos = " + sci.GetEndStyled()
+		
 		Local startPos:Int = sci.WordStartPosition(curPos, True)
 		'Local chars:String = sci.getWordChars()
 		Local lenEntered:Int = curPos - startPos
@@ -971,18 +1027,24 @@ Type TScintilla Extends wxScintilla
 		Local charNext:Int = sci.GetCharAt(curPos)
 		Local isLetter:Int = charEntered > 64 And charEntered < 91 Or charEntered > 96 And charEntered < 123
 		Local isNextLetter:Int = charNext > 64 And charNext < 91 Or charNext > 96 And charNext < 123
-
+		
+		Local txt:String = sci.GetTextRange(startPos, curPos)
+		
 		sci.SetPreviousPos( curPos )
 		
-		DebugLog "OnCharAdded -> isLetter = " + isLetter + " | start = " + startPos + " | curPos = " + curPos + " | charEntered = " + charEntered + " | prevPos = " + sci.GetPreviousPos() + " | AutoCompActive = " + sci.AutoCompActive()
+		'DebugLog "OnCharAdded -> isLetter = " + isLetter + " | start = " + startPos + " | curPos = " + curPos + " | charEntered = " + charEntered + " | prevPos = " + sci.GetPreviousPos() + " | AutoCompActive = " + sci.AutoCompActive()
+		
+		'DebugLog "OnCharAdded: (" + charEntered + ") word = " + txt
 		
 		If lenEntered > 1 Then
 			If Not isNextLetter
-				If Not sci.AutoCompActive() Then
-					sci.AutoCompShow(lenEntered, sci.GetAutoKeywords() )
-				Else
-					DebugLog "AutoCompActive -> Current selection is " + sci.AutoCompGetCurrent() 
-				EndIf		
+				'If Not sci.AutoCompActive() Then
+					
+					Local keys:String = sci.GetAutoKeywords(txt)
+					If keys Then sci.AutoCompShow(lenEntered, keys )
+				'Else
+					'DebugLog "AutoCompActive -> Current selection is " + sci.AutoCompGetCurrent() 
+				'EndIf		
 			EndIf
 		EndIf
 		
@@ -999,8 +1061,8 @@ Type TScintilla Extends wxScintilla
 		Local keyCode:Int = key_ev.GetKeyCode()
 		Local curPos:Int = sci.GetCurrentPos()
 		
-		'Local key:String = Chr(keyCode)
-		'DebugLog key + " | " + keyCode
+		Local key:String = Chr(keyCode)
+		'DebugLog "OnKeyDown: " + key + " | " + keyCode
 		
 		Select keyCode
 		
@@ -1008,10 +1070,19 @@ Type TScintilla Extends wxScintilla
 			
 			sci.SetPreviousPos( curPos - 1, True )
 			
-		Case KEY_TAB, KEY_ENTER, KEY_SPACE, KEY_NEWLINE
+		Case KEY_TAB, KEY_ENTER, KEY_SPACE, KEY_NEWLINE, KEY_8	'KEY_8 for left parenthesis
 			
-			'DebugLog "OnKeyDown -> Autocomplete = "+ sci.AutoCompActive()
+			DebugLog "OnKeyDown (Analyze) -> Autocomplete = "+ sci.AutoCompActive()
 			
+			If keyCode = KEY_8 And Not key_ev.ShiftDown() Then
+				
+				DebugLog "OnKeyDown: Number 8 pressed, but not with holding shift key"
+				
+				ev.skip()
+				Return
+			EndIf
+			
+			Rem
 			If sci._isActive() And keyCode <> KEY_SPACE Then
 				
 				DebugLog "OnKeyDown -> Autocomplete is active! -> Skipping event"
@@ -1019,6 +1090,8 @@ Type TScintilla Extends wxScintilla
 				ev.skip()
 				Return
 			EndIf
+			EndRem
+			
 			
 			Local startPos:Int = sci.WordStartPosition(curPos, True)
 			Local lenEntered:Int = curPos - startPos
@@ -1028,17 +1101,18 @@ Type TScintilla Extends wxScintilla
 			
 			If lenEntered > 0 Or keyCode = KEY_ENTER Or keyCode = KEY_NEWLINE Then
 			
-				DebugLog "KEY_PRESSED -> Analyze line = " + line + " | text = " + txt
+				'DebugLog "KEY_PRESSED -> Analyze line = " + line + " | text = " + txt
 				
 				If keyCode = KEY_ENTER Or keyCode = KEY_NEWLINE Then
 					
-					DebugLog "KEY_ENTER -> Updating tree | line = " + line
+					'DebugLog "KEY_ENTER -> Updating tree | line = " + line
 					
 					startPos = lineStartPos
 					
 					' Update tree
-					Local m:TModified = TModified.CreateLine(MODIFIED_TREE_UPDATE, line, 1)	'Single press means count = 1
-					TExplorer.SetEvent(m)
+					'Local m:TModified =
+					TModified.CreateLine(MODIFIED_TREE_UPDATE, line, 1)	'Single press means count = 1
+					'TExplorer.SetEvent(m)
 				EndIf
 				
 				sci.SetSavePoint()
@@ -1189,8 +1263,6 @@ Type TScintilla Extends wxScintilla
 		Local sci:TScintilla = TScintilla(ev.parent)
 		If Not sci Then DebugLog "OnMenuSelected -> No sci"; ev.Skip(); Return
 		
-		'DebugStop
-		
 		'Local cev:wxCommandEvent = wxCommandEvent(ev)
 		'If Not cev Then DebugLog "OnMenuSelected -> No menu!"; ev.skip(); Return
 		
@@ -1214,7 +1286,7 @@ Type TScintilla Extends wxScintilla
 		Local modType:Int = sev.GetModificationType()
 		Local lines:Int = sev.GetLinesAdded()
 		
-		'If modType & wxSCI_MOD_DELETETEXT Then DebugLog "wxSCI_MOD_DELETETEXT"
+		'If modType & wxSCI_MOD_DELETETEXT Then DebugLog "wxSCI_MOD_DELETETEXT -> lines = " + lines
 		'If modType & wxSCI_MOD_CHANGESTYLE Then DebugLog "wxSCI_MOD_CHANGESTYLE"
 		'If modType & wxSCI_MOD_CHANGEFOLD Then DebugLog "wxSCI_MOD_CHANGEFOLD"
 		'If modType & wxSCI_PERFORMED_USER Then DebugLog "wxSCI_PERFORMED_USER"
@@ -1225,21 +1297,22 @@ Type TScintilla Extends wxScintilla
 		
 				DebugLog "UNDO/REDO (Delete):  Length="+sev.GetLength()+"|line="+sev.GetLine()+"|text="+sev.GetText()+"|linesAdded="+sev.GetLinesAdded()
 		
-				sci.SetEvent(MODIFIED_DELETE, lines )
+				sci.SetEvent(MODIFIED_LINES_DEL, lines )
 		
 			ElseIf modType & wxSCI_MOD_INSERTTEXT
 		
 				DebugLog "UNDO/REDO (Insert):  Length="+sev.GetLength()+"|line="+sev.GetLine()+"|text="+sev.GetText()+"|linesAdded="+sev.GetLinesAdded()
 		
-				sci.SetEvent(MODIFIED_ADD, lines )
+				sci.SetEvent(MODIFIED_LINES_ADD, lines )
 			EndIf
 		
 		ElseIf modType & wxSCI_MOD_DELETETEXT Or modType & wxSCI_MOD_DELETETEXT
 		
 			If lines < 0 Then
-				sci.SetEvent(MODIFIED_DELETE, Abs(lines) )
+				DebugLog "OnModified -> Deleting " + lines + " line(s)! "
+				sci.SetEvent(MODIFIED_LINES_DEL, lines )
 			ElseIf lines > 0
-				DebugLog "OnModified -> Adding "+lines+" lines! "
+				DebugLog "OnModified -> Adding " + lines + " line(s)! "
 			EndIf
 		EndIf
 		
@@ -1275,7 +1348,7 @@ Type TScintilla Extends wxScintilla
 				
 				sci.SetFoldLevels(start, stop)
 				
-			Case MODIFIED_ADD
+			Case MODIFIED_LINES_ADD
 				
 				Local start:Int = sci.LineFromPosition( sci.GetCurrentPos() ) - 2
 				Local stop:Int = start + m.line
@@ -1284,18 +1357,19 @@ Type TScintilla Extends wxScintilla
 				
 				sci.SetFoldLevels(start, stop)
 				
-			Case MODIFIED_DELETE
+			Case MODIFIED_LINES_DEL
 				
 				Local start:Int = sci.GetCurrentLine()
 				Local stop:Int = start
 				
-				DebugLog "OnMyModified -> DELETE | start = " + start + " | stop = " + stop
+				DebugLog "OnMyModified -> DELETE | start = " + start + " | lines = " + m.line
 				
 				sci.SetFoldLevels(start, stop)
 				
 				' Update tree
-				Local m:TModified = TModified.CreateLine(MODIFIED_TREE_UPDATE, start, m.line)	'Single press means count = 1
-				TExplorer.SetEvent(m)
+				'Local m:TModified = 
+				TModified.CreateLine(MODIFIED_TREE_UPDATE, start, m.line)	'Single press means count = 1
+				'TExplorer.SetEvent(m)
 				
 			'Case MODIFIED_SELECT
 				
@@ -1410,13 +1484,12 @@ Type TScintilla Extends wxScintilla
 	Method Analyze(startPos:Int, endPos:Int, isPaste:Int = False, full:Int = False)
 		
 		'DebugLog "Analyze -> prevPos = " + GetPreviousPos() + " |start = " + startPos + " |End = " + endPos + " |txt = " + GetTextRange(startPos, endPos)
+		'DebugLog "Analyze: txt = " + GetTextRange(startPos, endPos)
 		
 		Local txt:String
 		Local curPos:Int = GetCurrentPos()
 
 		If Not isPaste Then 
-			
-			'DebugStop
 			
 			If startPos = endPos Then
 				If TOptions.opt.folding Then SetEvent(MODIFIED_FOLDLEVELS)
@@ -1426,14 +1499,13 @@ Type TScintilla Extends wxScintilla
 			Local start:Int = LineFromPosition(startPos)
 			Local stop:Int = LineFromPosition(endPos)
 			
+			SetFoldLevels(start, stop)
+			
 			txt = Parse(GetTextRange(startPos, endPos), start )
-			'txt = GetWord( GetTextRange(startPos, endPos) )
 			
-			DebugLog "Analyze: Start = "+start+" | FoldParent = "+GetFoldParent(start)+ " | txt = " +txt
+			'DebugLog "Analyze: Start = "+start+" | FoldParent = "+GetFoldParent(start)+ " | txt = " +txt
 			
-			'If TWord.isMatch() Then
 			If txt Then	
-				'DebugLog "Analyze -> isMatch!(" + txt + ") | curPos = " + curPos
 				
 				If TOptions.opt.autoCap Then
 					
@@ -1441,58 +1513,24 @@ Type TScintilla Extends wxScintilla
 					GetSelection(selStart, selEnd)
 					
 					isSelected = (selEnd - selStart > 0)
-					'If isSelected Then DebugLog "isMatch -> SELECTION EXISTS!"
 					
 					SetUndoCollection(False)
 					DeleteRange(startPos, endPos - startPos)
 					InsertText(startPos, txt)
-					'AddText(txt)
 					SetUndoCollection(True)	
 					SetSelection(curPos, curPos)
 					
 					If isSelected Then SetSelection(selStart, selEnd)
 				EndIf
 				
+				Rem
 				If TOptions.opt.folding Then
 					SetFoldLevels(start, stop)
 				EndIf
+				EndRem
 				
 			EndIf
 			
-			Rem
-			txt = GetWord( GetTextRange(startPos, endPos) )
-			
-			If TWord.isMatch() Then
-				
-				'DebugLog "Analyze -> isMatch!(" + txt + ") | curPos = " + curPos
-				
-				If TOptions.opt.autoCap Then
-					
-					Local selStart:Int, selEnd:Int, isSelected:Int
-					GetSelection(selStart, selEnd)
-					
-					isSelected = (selEnd - selStart > 0)
-					'If isSelected Then DebugLog "isMatch -> SELECTION EXISTS!"
-					
-					SetUndoCollection(False)
-					DeleteRange(startPos, endPos - startPos)
-					InsertText(startPos, txt)
-					'AddText(txt)
-					SetUndoCollection(True)	
-					SetSelection(curPos, curPos)
-					
-					If isSelected Then SetSelection(selStart, selEnd)
-				EndIf
-				
-				If TOptions.opt.folding Then
-					
-					Local start:Int = LineFromPosition(startPos)
-					Local stop:Int = LineFromPosition(endPos)
-					SetFoldLevels(start, stop)
-				EndIf
-				
-			EndIf
-			EndRem
 		Else
 		
 			txt = GetClipboard()
@@ -1502,7 +1540,6 @@ Type TScintilla Extends wxScintilla
 			If txt Then
 				
 				txt = Parse(txt, LineFromPosition(curPos))
-				'If TOptions.opt.autoCap Then txt = TWord.Parse(txt, LineFromPosition(curPos))
 				
 				'Check selected text and clear before adding
 				Local selStart:Int, selEnd:Int
@@ -1517,7 +1554,7 @@ Type TScintilla Extends wxScintilla
 				If TOptions.opt.folding Then
 					
 					Local start:Int = LineFromPosition(curPos)
-					Local stop:Int = LineFromPosition(curPos + txt.length )
+					Local stop:Int = LineFromPosition(curPos + txt.Length )
 					
 					SetFoldLevels(start, stop)
 				EndIf
@@ -1549,7 +1586,7 @@ Type TScintilla Extends wxScintilla
 			If TOptions.opt.folding Then
 				
 				Local start:Int = LineFromPosition(curPos)
-				Local stop:Int = LineFromPosition(curPos + file.text.length )
+				Local stop:Int = LineFromPosition(curPos + file.text.Length )
 				
 				SetFoldLevels(start, stop)
 			EndIf
@@ -1559,13 +1596,12 @@ Type TScintilla Extends wxScintilla
 	EndMethod
 	
 	Method AutoCompActive:Int()
-		'Return _autoCompActive
 		Return bmx_wxscintilla_autocompactive(wxObjectPtr)
 	End Method
 	
 	Method AutoCompShow(lenEntered:Int, itemList:String)
 	
-		DebugLog "AutoCompShow"
+		'DebugLog "AutoCompShow"
 	
 		_autoCompActive = True
 		bmx_wxscintilla_autocompshow(wxObjectPtr, lenEntered, itemList)
@@ -1611,7 +1647,7 @@ Type TScintilla Extends wxScintilla
 			
 			If hitPos > -1 Then
 			
-				SetSelection(hitPos, hitPos + txt.length)
+				SetSelection(hitPos, hitPos + txt.Length)
 				EnsureCaretVisible()
 			Else
 				'Wrap search from beginning
@@ -1619,11 +1655,39 @@ Type TScintilla Extends wxScintilla
 				
 				If hitPos > -1 Then
 				
-					SetSelection(hitPos, hitPos + txt.length)
+					SetSelection(hitPos, hitPos + txt.Length)
 					EnsureCaretVisible()
 				EndIf
 			EndIf
 		EndIf
+	EndMethod
+	
+	Method GetCodeStatus:Int()
+		Return _codeStatus
+	EndMethod
+	
+	Method GetLineCodeStatus:Int(line:Int)
+		
+		'Get rem status
+		'Local line:Int = LineFromPos(curPos)
+		'Print "GetLineCodeStatus: line = " + line + " | parent line = " + GetFoldParent(line)
+		'GetFoldParent(line)
+		
+	EndMethod
+	
+	Method GetCodeStatusString:String(status:Int)
+		
+		Select status
+		Case CODE_STATUS_DEFAULT	Return "CODE_STATUS_DEFAULT"
+		Case CODE_STATUS_REM		Return "CODE_STATUS_REM"
+		Case CODE_STATUS_COM		Return "CODE_STATUS_COM"
+		Case CODE_STATUS_STRING		Return "CODE_STATUS_STRING"
+		Case CODE_STATUS_IDENTIFIER	Return "CODE_STATUS_IDENTIFIER"
+		'Case CODE_STATUS_	Return "CODE_STATUS_"
+		Default
+			Return "CODE_STATUS_UNKNOWN"
+		EndSelect
+		
 	EndMethod
 	
 	Method GetClipboard:String()
@@ -1636,15 +1700,30 @@ Type TScintilla Extends wxScintilla
 				Local data:wxTextDataObject = New wxTextDataObject.Create("")
 				clip.GetData(data)
 				text  = data.GetText()
-				clip.close()
+				clip.Close()
 			EndIf
 		EndIf
 		
 		Return text
 	EndMethod
 	
-	Function GetAutoKeywords:String()
-		Return _autoKeywords
+	Function GetAutoKeywords:String(txt:String)
+	
+		'Return _autoKeywords
+		Local t:String = txt.toLower()
+		Local a:String
+		
+		For Local w:TWord = EachIn _wordList
+			If w.key.startswith(t) Then
+				If a Then
+					a:+ " " + w.key
+				Else
+					a:+ w.key
+				EndIf
+			EndIf
+		Next
+		
+		Return a
 	EndFunction
 		
 	Function GetKeywords:String(style:Int = wxSCI_B_KEYWORD)
@@ -1662,6 +1741,7 @@ Type TScintilla Extends wxScintilla
 		
 		For Local w:TWord = EachIn _wordList
 			If w.key = tmpKey Then
+			
 				_isMatch = True
 				If w.trace Then
 					_isTraceable = True
@@ -1727,7 +1807,7 @@ Type TScintilla Extends wxScintilla
 		
 		If Not ar Then Notify "Error: Could not create keywords.",True; Return False
 		
-		For Local i:Int = 0 Until ar.length
+		For Local i:Int = 0 Until ar.Length
 			
 			If Not ar[i].Trim() Then Continue
 			
@@ -1742,22 +1822,22 @@ Type TScintilla Extends wxScintilla
 		Return True
 	EndFunction
 	
-	Function Parse:String(txt:String = "", start:Int = 0)
+	Method Parse:String(txt:String = "", start:Int = 0)
 		
 		If Not txt Then Return txt
 		
-		DebugLog "Parse -> " + start + " | length = " + txt.length 
+		DebugLog "Parse -> " + start + " | length = " + txt.Length 
 		
 		Local startPos:Int = -1, lineCount:Int = start
-		Local isString:Int, isCom:Int, isRem:Int, isNewline:Int, isEnd:Int	', isFirst:Int = 1
+		Local IsString:Int, isCom:Int, isRem:Int, isNewline:Int, isEnd:Int	', isFirst:Int = 1
 		Local isParam:Int
 		Local isIdentifier:Int	'isFunction:Int, isMethod:Int, isType:Int
 		Local token:String, name:String, char:Int, analyze:Int, txt_ptr:Short Ptr = txt.ToWString()
-		Local eol:Int = txt.length - 1
+		Local eol:Int = txt.Length - 1
 		
 		Local s:String
 		
-		For Local i:Int = 0 Until txt.length
+		For Local i:Int = 0 Until txt.Length
 			
 			s = Chr(txt[i])
 			
@@ -1765,19 +1845,26 @@ Type TScintilla Extends wxScintilla
 				
 				Case 39 'Comment
 					
-					If isString Or isRem Then Continue
+					If IsString Or isRem Then Continue
 					
 					'analyze = 1
 					isCom = 1
+					SetCodeStatus(CODE_STATUS_COM)
 					
 				Case 34	'String
 					
 					If isCom Or isRem Then Continue
-					isString = Not isString
+					IsString = Not IsString
 					
-					If isString And startPos > -1 Then
+					'DebugLog "Parse: isString is true and startPos = " + startPos
+					
+					If IsString And startPos > -1 Then
+					
+						'DebugLog "isString and startpos > -1"
 						analyze = 1
 					Else
+						'DebugLog "No isString and startpos = -1"
+						SetCodeStatus(CODE_STATUS_STRING)
 						startPos = -1
 					EndIf
 
@@ -1787,8 +1874,10 @@ Type TScintilla Extends wxScintilla
 					
 				Case 10		'Newline
 						
-					isString = 0
+					IsString = 0
 					isCom = 0
+					
+					If GetCodeStatus() <> CODE_STATUS_REM Then SetCodeStatus(CODE_STATUS_DEFAULT)
 					
 					If startPos > -1 Then
 						isNewline = 1
@@ -1801,7 +1890,9 @@ Type TScintilla Extends wxScintilla
 				Case 13, 59		' Return, Semicolon ';'
 				
 					If startPos > -1 Then analyze = 1
-						
+					
+					If GetCodeStatus() <> CODE_STATUS_REM Then SetCodeStatus(CODE_STATUS_DEFAULT)
+					
 					Rem
 					If txt[i] = 10 Or txt[i] = 13 And startPos > -1 Then isNewline = 1	'Newline / Enter
 					If isString Or isCom Then
@@ -1828,7 +1919,7 @@ Type TScintilla Extends wxScintilla
 					If i = eol And startPos > -1 Then analyze = 1; i:+ 1
 			
 					isNewline = 0
-					If isString Or isCom Then Continue
+					If IsString Or isCom Then Continue
 					If startPos = -1 Then startPos = i
 					
 			EndSelect
@@ -1841,7 +1932,7 @@ Type TScintilla Extends wxScintilla
 				name = txt[startPos..i]
 				token = name.tolower()
 				
-				'DebugLog "Analyze -> LineCount = " + lineCount + " | Token = " + token
+				DebugLog "Analyze -> LineCount = " + lineCount + " | Token = " + token
 				
 				If Not isIdentifier Then
 					
@@ -1849,23 +1940,31 @@ Type TScintilla Extends wxScintilla
 						isEnd = 1	'; Continue
 					ElseIf token = "endrem" Or token = "end rem" Then
 						isRem = 0
+						TModified.CreateRem(MODIFIED_REM_DEL, i)
+						SetCodeStatus(CODE_STATUS_DEFAULT)
 					ElseIf token = "rem"
 						isRem = 1
+						TModified.CreateRem(MODIFIED_REM_ADD, i)
+						SetCodeStatus(CODE_STATUS_REM)
 					EndIf
 					
 					name = GetWord(token)
 					If isMatch() Then
 						If TOptions.opt.autoCap And name <> token Then
-							For char = 0 Until token.length
+							For char = 0 Until token.Length
 								txt_ptr[startPos + char] = name[char]
 							Next
 						EndIf
 						
 						isIdentifier = isTraceable()
-						
-						If isIdentifier And isEnd Then
-							isEnd = 0
-							isIdentifier = 0
+					
+						If isIdentifier
+							If isEnd Then
+								isEnd = 0
+								isIdentifier = 0
+							Else
+								SetCodeStatus(CODE_STATUS_IDENTIFIER)
+							EndIf
 						EndIf
 						
 						'DebugLog "Keyword: " + name + " | isTraceable = " + isIdentifier
@@ -1888,9 +1987,9 @@ Type TScintilla Extends wxScintilla
 		Next
 		
 		Return txt.FromWString(txt_ptr)
-	EndFunction
+	EndMethod
 	
-	Function ParseTraceable(token:String, line:Int = -1)	', isParent:Int = False)
+	Method ParseTraceable(token:String, line:Int = -1)	', isParent:Int = False)
 		
 		Local traceType:String = _traceType
 		
@@ -1913,17 +2012,17 @@ Type TScintilla Extends wxScintilla
 			Local ar:String[] = token.split(":")		
 		EndIf
 		
-		'DebugLog token + " | line = " + line + " | key = " + key
+		DebugLog "ParseTraceable: token = " + token + " | key = " + key + " | traceType = " + traceType
 		
 		Local w:TWord = New TWord
 		w.name = token
 		w.key = key
-		w.line = line
+		w.startLine = line
+		w.traceType = traceType
 		
-		Local m:TModified = TModified.CreateWord(MODIFIED_TREE_ADD, w)
-		TExplorer.SetEvent(m)
+		TModified.CreateWord(MODIFIED_TREE_ADD, w)
 		
-	EndFunction
+	EndMethod
 	
 	Method Paste()
 		
@@ -1956,6 +2055,12 @@ Type TScintilla Extends wxScintilla
 	Method Replace()
 	EndMethod
 	
+	Method SetCodeStatus(status:Int = CODE_STATUS_DEFAULT)
+		
+		DebugLog "Code Status = " + GetCodeStatusString(status)
+		_codeStatus = status
+	EndMethod
+	
 	Method SetEvent(id:Int, line:Int = 0)
 		
 		Local m:TModified = New TModified
@@ -1969,6 +2074,8 @@ Type TScintilla Extends wxScintilla
 	EndMethod
 
 	Method SetFoldLevels(start:Int, stop:Int)
+		
+		DebugLog "SetFoldLevels: start = " + start + " | stop = " + stop
 		
 		If Not TOptions.opt.folding Then Return
 		
@@ -2034,10 +2141,38 @@ Type TScintilla Extends wxScintilla
 					level:-1
 					Continue
 				EndIf
-			EndIf	
+			EndIf
+			
 		Next
-	
+		
+		For Local i:Int = 0 Until stop
+			
+			Local l:Int = GetFoldLevel(i)
+			
+			DebugLog "~tSetFoldLevels: line + " + i + " has level of " + l
+		Next
 	EndMethod
+	
+	Function SetHeaderWords:Int(words:String)
+		If Not words Then Return False
+		
+		Local ar:String[] = words.split(" ")
+		If Not ar Then Notify "Error: Could not set header keywords.",True; Return False
+		
+		For Local i:Int = 0 Until ar.Length
+			
+			Local tmpKey:String = ar[i].Trim().tolower()
+			If Not tmpKey Then Continue
+			
+			For Local w:TWord = EachIn _wordList
+				If w.key = tmpKey Then
+					w.header = True; Exit
+				EndIf
+			Next
+		Next
+		
+		Return True
+	EndFunction
 	
 	Method SetLexerStyle(lexer:Int)
 		
@@ -2064,8 +2199,8 @@ Type TScintilla Extends wxScintilla
 		
 	EndMethod
 	
-	Method SetPreviousPos(pos:Int, update:Int = False)
-		_caretPos = pos; _updatePos = update
+	Method SetPreviousPos(pos:Int, Update:Int = False)
+		_caretPos = pos; _updatePos = Update
 	EndMethod
 		
 	Function SetTraceWords:Int(words:String)
@@ -2074,7 +2209,7 @@ Type TScintilla Extends wxScintilla
 		Local ar:String[] = words.split(" ")
 		If Not ar Then Notify "Error: Could not set traceable keywords.",True; Return False
 		
-		For Local i:Int = 0 Until ar.length
+		For Local i:Int = 0 Until ar.Length
 			
 			Local tmpKey:String = ar[i].Trim().tolower()
 			If Not tmpKey Then Continue
@@ -2139,7 +2274,7 @@ Type TTreeCtrl Extends wxTreeCtrl
 		Local w:TWord = TWord( tree.GetItemData(item) )
 		If Not w Then DebugLog "OnItemActivated -> No word!"; Return
 		
-		TEditor.SetEvent(MODIFIED_SELECT_LINE, w.line)
+		TEditor.SetEvent(MODIFIED_SELECT_LINE, w.startLine)
 		 
 	EndFunction
 	
@@ -2179,15 +2314,23 @@ Type TTreeCtrl Extends wxTreeCtrl
 					
 				tree.AddTraceable(m.word)
 			
-			Case MODIFIED_TREE_DELETE		
+			Rem
+			Case MODIFIED_TREE_DELETE	'Deleting lines is handled with MODIFIED_TREE_UPDATE using negative count	
 				
 				DebugLog "TTreeCtrl -> OnMyModified -> MODIFIED_TREE_DELETE -> line = " + m.line
+			EndRem
 			
 			Case MODIFIED_TREE_UPDATE		
 				
-				DebugLog "TTreeCtrl -> OnMyModified -> MODIFIED_TREE_UPDATE -> line = " + m.line
+				DebugLog "TTreeCtrl -> OnMyModified -> MODIFIED_TREE_UPDATE -> line = " + m.line + " | count = " + m.count
 				
-				tree.UpdateTree(m.line)
+				tree.UpdateTree(m.line, m.count)
+			
+			Case MODIFIED_REM_ADD
+				
+				DebugLog "TTreeCtrl -> OnMyModified -> MODIFIED_REM_ADD -> line = " + m.line
+				
+				tree.AddRem(m.word)
 			
 			Default
 				DebugLog "OnMyModified -> ID not found!"
@@ -2197,41 +2340,125 @@ Type TTreeCtrl Extends wxTreeCtrl
 		_evtQueue.Clear()
 	EndFunction
 	
-	Method AddItem:wxTreeItemId(item:String, parent:wxTreeItemId=Null, extra:Object=Null)
+	Method AddItem:wxTreeItemId(text:String, parent:wxTreeItemId = Null, extra:Object = Null)
 		
 		If Not _root Then _root = AddRoot("Root")
 		If Not parent Then parent = _root
 		
 		Local id:wxTreeItemId	
-		id = AppendItem(parent, item,,, extra)
+		id = AppendItem(parent, text,,, extra)
 		
 		Return id
 		
 	EndMethod
 	
 	Method AddTraceable(w:TWord)
-		DebugLog "AddTraceable -> line = " + w.line + " | " + w.name
+		
+		DebugLog "Tree.AddTraceable: line = " + w.startLine + " | name = " + w.name
+		
+		If Not w Then Return
+				
+		Local prev:TWord
+		
+		For Local tmp:TWord = EachIn _traceList
+		
+			'Update exiting traceable
+			If tmp.startLine = w.startLine Then
+				
+				DebugLog "Tree.AddTraceable: line found. Updating " + tmp.name + " -> " + w.name
+				
+				tmp.name = w.name
+				tmp.traceType = w.traceType
+				
+				SetItemText(tmp.item, tmp.name) 
+				Return
+				
+			'Adding item in the middle
+			ElseIf tmp.startLine > w.startLine
+				
+				If prev Then
+					
+					DebugLog "Tree.AddTraceable: Adding in the middle after " + prev.name
+					
+					w.prev = prev	'._item
+					GetParent(w)
+					
+					Local parent:wxTreeItemId = GetParentItem(w)
+					
+					_traceList.insertBeforeLink(w, _traceList.findLink(tmp) )
+					w.item = InsertItem(parent, prev.item, w.name,,, w)
+				
+				Else
+					DebugLog "Tree.AddTraceable: Adding in the middle at start"
+					
+					_traceList.insertBeforeLink(w, _traceList.findLink(tmp) )
+					'w.item = InsertItem(_root, _root, w.name,,, w)
+					w.item = InsertItemBefore(_root, 0, w.name,,, w)
+				EndIf
+				
+				Return
+			EndIf
+			
+			prev = tmp
+		Next
+		
+		If prev Then				
+			w.prev = prev
+			GetParent(w)
+		EndIf
+		
+		_traceList.addlast(w)
+		w.item = AddItem(w.name,, w)
+	EndMethod
+	
+	Method AddRem(w:TWord)
+		
+		DebugLog "Tree.AddRem: line = " + w.startLine
+		
 		If Not w Then Return
 		
 		For Local tmp:TWord = EachIn _traceList
-			If tmp.line = w.line Then
+			If tmp.startLine = w.startLine Then
+				DebugLog "Tree.AddRem: line found. "
 				
+				Return
 			EndIf
 		Next
 		
 		_traceList.addlast(w)
-		AddItem(w.name,, w)
+		'AddItem(w.name,, w)
 	EndMethod
 	
-	Method GetTreeviewItem:String(index:Int, col:Int)
-	EndMethod
+	Function GetParentItem:wxTreeItemId(w:TWord)
+		
+		If Not w Then Return Null
+		If Not w.parent Then Return Null
+		
+		Return w.parent.item
+	EndFunction
 	
+	Method GetParent(w:TWord)
+		
+		If Not w Or Not w.prev Then Return
+		
+		If w.prev.header Then
+			w.parent = w.prev
+		Else
+			w.parent = w.prev.parent
+		EndIf
+		
+	EndMethod
+
 	Method GetSelectedItem:wxTreeItemId()
 		Return GetSelection()
 	EndMethod
 	
 	Method GetSelectedItems:wxTreeItemId[]()
 		Return GetSelections()
+	EndMethod
+		
+	Method GetTreeviewItem:String(index:Int, col:Int)
+		'Todo
 	EndMethod
 	
 	Method SetEvent(m:TModified)	'id:Int, lines:Int = 0)
@@ -2255,9 +2482,12 @@ Type TTreeCtrl Extends wxTreeCtrl
 	
 	Method UpdateTree(line:Int, count:Int = 1)
 		
+		DebugLog "UpdateTree: Line = " + line + " | count = " + count
+		
 		For Local w:TWord = EachIn _traceList
-			If w.line => line Then
-				w.line:+ count
+			If w.startLine > line Then
+				DebugLog "UpdateTree: Updating " + w.name + " -> line " + w.startLine + " to " + (w.startLine + count)
+				w.startLine:+ count
 			EndIf
 		Next
 	EndMethod
@@ -2280,6 +2510,20 @@ Type TFile
 		
 		Return f
 	EndFunction
+	
+	Method Build:Int(run:Int)
+		
+		Local opt:String
+		
+		If TOptions.opt.isDebug Then opt = "-d"; Else opt = "-r"
+		If TOptions.opt.doRun Then opt:+ " -x"
+		
+		Local arc:String = TOptions.opt.arc
+		Local cmd:String
+		
+		cmd = TOptions.opt.BMK_FILE + " makeapp " + opt + " -g " + arc + " " + url
+		
+	EndMethod
 	
 	Function LoadFile:TFile()
 		
@@ -2318,58 +2562,44 @@ EndType
 Type TOptions
 	Global opt:TOptions = New TOptions
 	
+	Field BMK_FILE:String = "bin\bmk.exe"
 	Field autoCap:Int = True
 	Field folding:Int = True
+	
+	Field isDebug:Int
+	Field console:Int
+	Field arc:String
+	Field doRun:Int
 	
 	Method LoadOptions()
 		
 	EndMethod
 EndType
 
-Rem
-Type TInstance
-	Field sci:TScintilla
-	Field tree:TTreeCtrl
-	
-	Global list:TList = New TList
-	
-	Function InitNewInstance:Int()
-		Local in:TInstance = New TInstance
-		
-		in.sci = TEditor.myEditor.NewEditor()
-		If Not in.sci Then Notify("Error: Could not create new instance", True); Return False
-		
-		in.tree = TExplorer.myExplorer.NewTree()
-		If Not in.tree Then Notify("Error: Could not create new instance", True); Return False
-		
-	EndFunction
-	
-	Function GetCurrentInstance:TInstance()
-		Local sci:TScintilla = TEditor.myEditor.GetCurrentEdit()
-		If Not sci Then Notify("Error: Could not find open instance", True); Return Null
-		
-		For Local in:TInstance = EachIn list
-			If in.sci = sci Then Return in
-		Next
-		
-		Notify("Error: Could not find open instance", True); Return Null
-	EndFunction
-EndType
-EndRem
 
 Type TWord
+	
+	Field parent:TWord
+	Field prev:TWord
+	
+	Field item:wxTreeItemId
 	
 	Field style:Int
 	Field name:String
 	Field key:String
-	Field trace:Int
-	Field line:Int
-	Field traceKey:String	
+	Field trace:Int			'is traceable item
+	Field traceType:String
+	Field header:Int		'causes a branch in the tree
+	Field startLine:Int
+	Field stopLine:Int
+		
+	'Field level:Int
 	
 	Method compare:Int(o:Object)
 		Local w:TWord = TWord(o)
 		Return w.name.compare(Self.name)
 	EndMethod
+	
 EndType
 
 Type TStyle
@@ -2408,21 +2638,34 @@ Type TModified
 	Field count:Int
 	Field word:TWord
 	
-	Function CreateLine:TModified(id:Int, line:Int, count:Int = 0)
+	Function CreateLine(id:Int, line:Int, count:Int = 0)
 		Local m:TModified = New TModified
 		m.id = id
 		m.line = line
 		m.count = count
 		
-		Return m
+		TExplorer.SetEvent(m)
+	
 	EndFunction
 	
-	Function CreateWord:TModified(id:Int, word:TWord)
+	Function CreateWord(id:Int, word:TWord)
 		Local m:TModified = New TModified
 		m.id = id
 		m.word = word
 		
-		Return m
+		TExplorer.SetEvent(m)
+		
+	EndFunction
+	
+	Function CreateRem(id:Int, line:Int)
+		Local m:TModified = New TModified
+		m.id = id
+		m.line = line
+		
+		Local w:TWord = New TWord	
+		
+		TExplorer.SetEvent(m)
+		
 	EndFunction
 	
 EndType
@@ -2553,6 +2796,12 @@ Type ArtProvider Extends wxArtProvider
 								
 			Case userID_SAVE
 				Return wxBitmap.CreateFromFile("incbin::graphics\save.png", wxBITMAP_TYPE_PNG)
+			
+			Case userID_BUILD
+				Return wxBitmap.CreateFromFile("incbin::graphics\build.png", wxBITMAP_TYPE_PNG)
+			
+			Case userID_BUILD_AND_RUN
+				Return wxBitmap.CreateFromFile("incbin::graphics\buildAndRun.png", wxBITMAP_TYPE_PNG)
 					
 		End Select
 		Return wxNullBitmap
